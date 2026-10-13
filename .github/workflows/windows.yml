@@ -1,0 +1,81 @@
+name: Windows
+
+# Docker on Windows without Docker Desktop (`ducktainer engine install`),
+# installed for real on GitHub's Windows runners.
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  unit:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Go tests
+        run: go test ./...
+
+  native:
+    # Windows containers: dockerd.exe as a service, reached through npipe
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build -o ducktainer.exe .
+      - name: Remove the runner's preinstalled Docker
+        shell: pwsh
+        run: |
+          Stop-Service docker -ErrorAction SilentlyContinue
+          sc.exe delete docker
+          Get-Command docker -All -ErrorAction SilentlyContinue | ForEach-Object { Write-Host "was: $($_.Source)" }
+      - name: ducktainer engine install --mode native
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: .\ducktainer.exe engine install --mode native
+      - name: ducktainer engine status
+        run: .\ducktainer.exe engine status
+      - name: Run a Windows container through the new engine
+        shell: pwsh
+        run: |
+          $docker = "$env:ProgramFiles\Docker\docker.exe"
+          & $docker version
+          & $docker compose version
+          & $docker run --rm mcr.microsoft.com/windows/nanoserver:ltsc2022 cmd /c echo hello from a native engine
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+      - name: ducktainer talks to it (npipe endpoint)
+        run: .\ducktainer.exe ps
+
+  wsl:
+    # Linux containers: Docker in a WSL 2 distribution of ducktainer's own
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build
+        run: go build -o ducktainer.exe .
+      - name: WSL on this runner
+        shell: pwsh
+        run: |
+          wsl.exe --version
+          wsl.exe --status
+          exit 0
+      - name: ducktainer engine install --mode wsl
+        run: .\ducktainer.exe engine install --mode wsl
+      - name: ducktainer engine status
+        run: .\ducktainer.exe engine status
+      - name: Run a Linux container through the new engine
+        run: wsl.exe -d ducktainer -u root -- docker run --rm hello-world
+      - name: ducktainer talks to it (wsl endpoint)
+        run: .\ducktainer.exe ps -e wsl

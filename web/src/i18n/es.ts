@@ -1067,4 +1067,7 @@ export const es: Record<string, string> = {
   "Without a fingerprint, the certificate presented when saving is pinned.": "Sin fingerprint, se fija el certificado que presente al guardar.",
   "Hosts that receive them": "Hosts que las reciben",
   "Compose runs on a node get a copy of the credentials: limit them to the hosts that need them.": "Compose ejecutado en un nodo recibe una copia de las credenciales: limítalas a los hosts que las necesiten.",
+  "WSL distribution (Windows)": "Distribución WSL (Windows)",
+  "Named pipe (Windows)": "Named pipe (Windows)",
+  "Docker on this Windows machine. To install it without Docker Desktop:": "Docker en esta máquina Windows. Para instalarlo sin Docker Desktop:",
 }

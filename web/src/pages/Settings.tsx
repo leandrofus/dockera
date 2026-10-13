@@ -79,6 +79,10 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
       setF({ ...f, url: 'unix:///var/run/docker.sock' })
     } else if (s === 'tcp') {
       setF({ ...f, url: 'tcp://host:2376' })
+    } else if (s === 'wsl') {
+      setF({ ...f, url: 'wsl://ducktainer' })
+    } else if (s === 'npipe') {
+      setF({ ...f, url: 'npipe:////./pipe/docker_engine' })
     } else {
       setF({ ...f, url: 'ssh://user@host' })
     }
@@ -118,6 +122,8 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
             <option value="agent">{tr('Agent (outbound / Edge)')}</option>
             <option value="tcp">ducktainer expose (TCP + token)</option>
             <option value="unix">{tr('Local socket')}</option>
+            <option value="wsl">{tr('WSL distribution (Windows)')}</option>
+            <option value="npipe">{tr('Named pipe (Windows)')}</option>
           </select>
         </label>
         {scheme !== 'agent' && <label className="field span-2"><span>URL</span><input className="mono" value={f.url} onChange={(e) => setF({ ...f, url: e.target.value })} /></label>}
@@ -143,7 +149,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
               : <p className="help">{initial ? tr('Save to apply the new token, then install the agent again on the node.') : tr('Save the host to get the command that installs the agent on the node.')}</p>}
           </div>
         )}
-        {scheme !== 'unix' && (
+        {scheme !== 'unix' && scheme !== 'npipe' && (
           <details className="span-2">
             <summary className="small muted" style={{ cursor: 'pointer' }}>{tr('Stacks in directories on the node')}</summary>
             <div className="grid-2" style={{ marginTop: 8 }}>
@@ -159,6 +165,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
         {scheme === 'agent' && <>{tr('The standalone agent is downloaded directly from this server and connects outbound. Ideal for nodes behind NAT, firewalls or dynamic IPs.')}</>}
         {scheme === 'tcp' && <>{tr('Without a fingerprint, the certificate presented when saving is pinned.')} {tr('On the remote host:')} <code>ducktainer expose --allow &lt;{tr('your-IP')}&gt;</code>{tr('. It prints the token and TLS fingerprint to paste here.')}</>}
         {scheme === 'unix' && <>{tr('Docker socket of the machine running ducktainer.')}</>}
+        {(scheme === 'wsl' || scheme === 'npipe') && <>{tr('Docker on this Windows machine. To install it without Docker Desktop:')} <code>ducktainer engine install --mode {scheme === 'wsl' ? 'wsl' : 'native'}</code></>}
       </div>
     </Modal>
   )

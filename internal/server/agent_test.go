@@ -9,6 +9,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -110,6 +111,9 @@ func TestAgentInstallScriptAndBinary(t *testing.T) {
 	}
 	if strings.Contains(body, "--insecure") || strings.Contains(body, "--token") {
 		t.Fatalf("install script must not use --insecure or put the token on the command line:\n%s", body)
+	}
+	if runtime.GOOS == "windows" {
+		return // no sh to check the syntax with
 	}
 	if out, err := exec.Command("sh", "-n", "-c", body).CombinedOutput(); err != nil {
 		t.Fatalf("install script is not valid sh: %v\n%s", err, out)

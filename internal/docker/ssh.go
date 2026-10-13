@@ -99,6 +99,7 @@ type cmdConn struct {
 	r       io.ReadCloser
 	stderr  *limitedBuffer
 	host    string
+	kind    string // "ssh" or "wsl", for error messages
 	once    sync.Once
 	doneCh  chan struct{}
 	waitErr error
@@ -118,7 +119,11 @@ func (c *cmdConn) Read(p []byte) (int, error) {
 	n, err := c.r.Read(p)
 	if err == io.EOF && n == 0 {
 		if msg := c.stderr.String(); msg != "" {
-			return 0, fmt.Errorf("ssh %s: %s", c.host, msg)
+			kind := c.kind
+			if kind == "" {
+				kind = "ssh"
+			}
+			return 0, fmt.Errorf("%s %s: %s", kind, c.host, msg)
 		}
 	}
 	return n, err
