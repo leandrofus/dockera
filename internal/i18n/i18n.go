@@ -13,10 +13,11 @@ import (
 // catalogs maps a language to English format -> translated format.
 var catalogs = map[string]map[string]string{
 	"es": es,
+	"ru": ru,
 }
 
 // Supported lists the available languages (English first).
-func Supported() []string { return []string{"en", "es"} }
+func Supported() []string { return []string{"en", "es", "ru"} }
 
 func normalize(lang string) string {
 	lang = strings.ToLower(strings.TrimSpace(lang))

@@ -6,12 +6,12 @@
 
 **Administración de Docker en un único binario.** Una UI web tipo CRM (clic derecho en todo, vistas guardadas, kanban, paleta ⌘K), stacks compose con editor visual, marketplace de apps, logs en vivo y terminales web, acceso en un clic a cada puerto de cada contenedor, túneles privados y publicación por Cloudflare. Se entra con los **usuarios del sistema** (PAM), y el acceso por red se limita a los hosts que autorices.
 
-[English](README.md) · [sitio web](https://leandrofus.github.io/ducktainer/)
+[English](README.md) · [Русский](README.ru.md) · [sitio web](https://leandrofus.github.io/ducktainer/)
 
 - **Nada que instalar en los hosts remotos**: se llega por **SSH** (`docker system dial-stdio`, como `DOCKER_HOST=ssh://`), por TLS (`tcp://`, por ejemplo un `ducktainer expose` remoto) o, para nodos detrás de NAT o cortafuegos, con un **agente saliente** opcional (el mismo binario) que se conecta al servidor.
 - **Mínimo privilegio**: el servicio corre con un usuario sin privilegios. `ducktainer setup` lo adapta a cómo esté instalado Docker: grupo del socket, rootless o solo root. Solo la verificación de contraseñas corre como root, en un helper activado por socket.
 - **Control de acceso**: lista de IPs/CIDR/nombres de host permitidos (el resto se corta antes del TLS), roles a partir de grupos POSIX, TLS automático con fijado de certificado y registro de auditoría.
-- **Idiomas**: inglés y español. La UI sigue al navegador y se cambia desde el menú de usuario; la CLI usa `LANG` (por ejemplo `LANG=es_AR.UTF-8 ducktainer help`).
+- **Idiomas**: inglés, español y ruso. La UI sigue al navegador y se cambia desde el menú de usuario; la CLI usa `LANG` (por ejemplo `LANG=es_AR.UTF-8 ducktainer help`).
 
 ---
 

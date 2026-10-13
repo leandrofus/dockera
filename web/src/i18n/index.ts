@@ -2,12 +2,14 @@
 // written in English and wrapped in t(); catalogs map English -> language.
 // Placeholders are positional: t('Delete {0} containers', n).
 import { es } from './es'
+import { ru } from './ru'
 
-const catalogs: Record<string, Record<string, string>> = { es }
+const catalogs: Record<string, Record<string, string>> = { es, ru }
 
 export const LANGUAGES = [
   { id: 'en', label: 'English' },
   { id: 'es', label: 'Español' },
+  { id: 'ru', label: 'Русский' },
 ]
 
 function detect(): string {
