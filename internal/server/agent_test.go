@@ -13,19 +13,19 @@ import (
 	"testing"
 	"time"
 
-	"dockera/internal/access"
-	"dockera/internal/agent"
-	"dockera/internal/config"
-	"dockera/internal/docker"
-	"dockera/internal/server"
+	"ducktainer/internal/access"
+	"ducktainer/internal/agent"
+	"ducktainer/internal/config"
+	"ducktainer/internal/docker"
+	"ducktainer/internal/server"
 )
 
 func newTestServer(t *testing.T) (*server.Server, *config.Config, func()) {
-	tmpDir, err := os.MkdirTemp("", "dockera-srv-test-*")
+	tmpDir, err := os.MkdirTemp("", "ducktainer-srv-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Setenv("DOCKERA_HOME", tmpDir)
+	os.Setenv("DUCKTAINER_HOME", tmpDir)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -41,7 +41,7 @@ func newTestServer(t *testing.T) (*server.Server, *config.Config, func()) {
 	srv := server.New(cfg, acl, os.DirFS(tmpDir))
 	cleanup := func() {
 		os.RemoveAll(tmpDir)
-		os.Unsetenv("DOCKERA_HOME")
+		os.Unsetenv("DUCKTAINER_HOME")
 	}
 	return srv, cfg, cleanup
 }
@@ -60,7 +60,7 @@ func addAgentHost(t *testing.T, cfg *config.Config, name, token string) {
 func get(h http.Handler, path, token string) *httptest.ResponseRecorder {
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", path, nil)
-	req.Host = "dockera.central:9900"
+	req.Host = "ducktainer.central:9900"
 	if token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
 	}
@@ -93,7 +93,7 @@ func TestAgentInstallScriptAndBinary(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("binary with the host token: got %d, want 200", rec.Code)
 	}
-	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "dockera-agent") {
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "ducktainer-agent") {
 		t.Fatalf("expected Content-Disposition header, got %q", cd)
 	}
 
@@ -103,7 +103,7 @@ func TestAgentInstallScriptAndBinary(t *testing.T) {
 		t.Fatalf("install.sh: got %d, want 200", rec.Code)
 	}
 	body := rec.Body.String()
-	for _, want := range []string{"#!/bin/sh", "NAME='edge-node'", "TOKEN='edge-token'", "EnvironmentFile=/etc/dockera-agent/agent.env"} {
+	for _, want := range []string{"#!/bin/sh", "NAME='edge-node'", "TOKEN='edge-token'", "EnvironmentFile=/etc/ducktainer-agent/agent.env"} {
 		if !strings.Contains(body, want) {
 			t.Fatalf("install script lacks %q:\n%s", want, body)
 		}
@@ -125,7 +125,7 @@ func TestAgentTunnelAuth(t *testing.T) {
 	ts := httptest.NewServer(srv.Handler())
 	defer ts.Close()
 
-	tmpDir, _ := os.MkdirTemp("", "dockera-agent-mock-*")
+	tmpDir, _ := os.MkdirTemp("", "ducktainer-agent-mock-*")
 	defer os.RemoveAll(tmpDir)
 	mockSock := filepath.Join(tmpDir, "docker.sock")
 

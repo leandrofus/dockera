@@ -1,0 +1,16 @@
+[Unit]
+Description=ducktainer - system credential check (socket)
+PartOf=ducktainer.service
+
+[Socket]
+# Only the ducktainer group (the service user) may ask for password checks.
+ListenStream=/run/ducktainer/pam.sock
+SocketUser=root
+SocketGroup=ducktainer
+SocketMode=0660
+DirectoryMode=0755
+Accept=yes
+MaxConnections=16
+
+[Install]
+WantedBy=sockets.target

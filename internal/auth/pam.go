@@ -3,7 +3,7 @@
 package auth
 
 import (
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"errors"
 	"sync"
 

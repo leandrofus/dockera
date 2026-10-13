@@ -1,5 +1,5 @@
 # nfpm config — built by packaging/build.sh (make packages)
-name: dockera
+name: ducktainer
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
@@ -11,15 +11,18 @@ description: |
   Agentless Docker management: CRM-style web UI, compose stacks,
   marketplace, terminal and live logs. Sign-in with system users (PAM)
   and roles by POSIX groups.
-vendor: dockera
+vendor: ducktainer
 
 depends:
   - libpam0g
+# the project was called dockera until 0.1.0; both listen on port 9900
+conflicts:
+  - dockera
 overrides:
   rpm:
     depends:
       - pam
-      # any Docker-compatible engine; how dockera reaches it is detected at install (dockera setup)
+      # any Docker-compatible engine; how ducktainer reaches it is detected at install (ducktainer setup)
       - (docker-ce or moby-engine or docker or docker-ee or podman-docker)
     recommends:
       - (docker-compose-plugin or docker-compose)
@@ -33,24 +36,24 @@ overrides:
       - openssh-client
 
 contents:
-  - src: ./dist/build/dockera-linux-${ARCH}
-    dst: /usr/bin/dockera
+  - src: ./dist/build/ducktainer-linux-${ARCH}
+    dst: /usr/bin/ducktainer
     file_info: { mode: 0755 }
-  - src: ./packaging/systemd/dockera.service
-    dst: /usr/lib/systemd/system/dockera.service
-  - src: ./packaging/systemd/dockera-pam.socket
-    dst: /usr/lib/systemd/system/dockera-pam.socket
-  - src: ./packaging/systemd/dockera-pam@.service
-    dst: /usr/lib/systemd/system/dockera-pam@.service
-  - src: ./packaging/dockera.env
-    dst: /etc/dockera/dockera.env
+  - src: ./packaging/systemd/ducktainer.service
+    dst: /usr/lib/systemd/system/ducktainer.service
+  - src: ./packaging/systemd/ducktainer-pam.socket
+    dst: /usr/lib/systemd/system/ducktainer-pam.socket
+  - src: ./packaging/systemd/ducktainer-pam@.service
+    dst: /usr/lib/systemd/system/ducktainer-pam@.service
+  - src: ./packaging/ducktainer.env
+    dst: /etc/ducktainer/ducktainer.env
     type: config|noreplace
-  - src: ./packaging/pam/dockera.redhat
-    dst: /etc/pam.d/dockera
+  - src: ./packaging/pam/ducktainer.redhat
+    dst: /etc/pam.d/ducktainer
     type: config|noreplace
     packager: rpm
-  - src: ./packaging/pam/dockera.debian
-    dst: /etc/pam.d/dockera
+  - src: ./packaging/pam/ducktainer.debian
+    dst: /etc/pam.d/ducktainer
     type: config|noreplace
     packager: deb
 

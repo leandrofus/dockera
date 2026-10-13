@@ -3,7 +3,7 @@ package compose
 import (
 	"testing"
 
-	"dockera/internal/config"
+	"ducktainer/internal/config"
 )
 
 func TestAuthsOnlyForTheEndpoint(t *testing.T) {

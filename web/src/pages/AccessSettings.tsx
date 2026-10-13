@@ -173,10 +173,10 @@ function GiveAccess({ info, onClose }: { info: AccessInfo; onClose: () => void }
   const [username, setUsername] = useState('')
   const [role, setRole] = useState<'admin' | 'viewer'>('admin')
   const user = username.trim() || t('<user>')
-  // suggest the dedicated dockera group; any existing one otherwise
+  // suggest the dedicated ducktainer group; any existing one otherwise
   const roleGroups = info.roles.find((r) => r.role === role)?.groups ?? []
   const pick = roleGroups.find((g) => g.exists && g.name !== 'docker') ?? roleGroups.find((g) => g.exists) ?? roleGroups.find((g) => g.name !== 'docker') ?? roleGroups[0]
-  const group = pick?.name ?? (role === 'admin' ? 'dockera-admins' : 'dockera-viewers')
+  const group = pick?.name ?? (role === 'admin' ? 'ducktainer-admins' : 'ducktainer-viewers')
   return (
     <Drawer onClose={onClose} width={520}>
       <div className="acc-drawer">
@@ -185,7 +185,7 @@ function GiveAccess({ info, onClose }: { info: AccessInfo; onClose: () => void }
           <h3 className="grow">{t('Give someone access')}</h3>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
         </div>
-        <p className="help">{t('Access is granted on the server itself: dockera trusts system accounts and their groups.')}</p>
+        <p className="help">{t('Access is granted on the server itself: ducktainer trusts system accounts and their groups.')}</p>
         <div className="row gap wrap">
           <input autoFocus className="grow" placeholder={t('username')} value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))} />
           <div className="seg seg-text">
@@ -216,7 +216,7 @@ function GiveAccess({ info, onClose }: { info: AccessInfo; onClose: () => void }
             <span className="step-n">3</span>
             <div className="step-body">
               <strong>{t('Check it (optional)')}</strong>
-              <Cmd>{`sudo dockera auth test ${user}`}</Cmd>
+              <Cmd>{`sudo ducktainer auth test ${user}`}</Cmd>
             </div>
           </li>
           <li className="step">
@@ -369,7 +369,7 @@ function Network({ info, draft, setAllow }: { info: AccessInfo; draft: Draft; se
         <div className="alert alert-warn">
           <AlertTriangle size={14} />
           <span>
-            {t('dockera only listens on this machine (loopback), so nobody else can reach it yet. Add allowed hosts below and restart the service so it listens on the network:')} <code>sudo systemctl restart dockera</code>
+            {t('ducktainer only listens on this machine (loopback), so nobody else can reach it yet. Add allowed hosts below and restart the service so it listens on the network:')} <code>sudo systemctl restart ducktainer</code>
           </span>
         </div>
       )}
@@ -463,7 +463,7 @@ function Network({ info, draft, setAllow }: { info: AccessInfo; draft: Draft; se
         <p className="help">{t('Checks against the saved list.')}</p>
       </div>
       <p className="help">
-        <Terminal size={12} /> {t('Also from the terminal:')} <code>sudo dockera allow add 192.168.1.0/24</code> · <code>sudo dockera allow ls</code>
+        <Terminal size={12} /> {t('Also from the terminal:')} <code>sudo ducktainer allow add 192.168.1.0/24</code> · <code>sudo ducktainer allow ls</code>
       </p>
     </div>
   )
@@ -484,7 +484,7 @@ function SignIn({ info, draft, setAuth }: { info: AccessInfo; draft: Draft; setA
         >
           <Switch checked={a.pam} disabled={!info.pam.built && !a.pam} onChange={(v) => setAuth({ pam: v })} />
         </Setting>
-        <Setting title={t('Emergency token')} desc={<>{t('A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Only its hash is stored: create a new one with')} <code>sudo dockera token --rotate</code></>}>
+        <Setting title={t('Emergency token')} desc={<>{t('A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Only its hash is stored: create a new one with')} <code>sudo ducktainer token --rotate</code></>}>
           <Switch checked={a.token_login} onChange={(v) => setAuth({ token_login: v })} />
         </Setting>
         {!a.pam && !a.token_login && <div className="alert alert-bad"><AlertTriangle size={14} /> {t('Keep at least one sign-in method enabled.')}</div>}
@@ -501,7 +501,7 @@ function SignIn({ info, draft, setAuth }: { info: AccessInfo; draft: Draft; setA
 
       <div className="acc-block">
         <h4><RefreshCw size={15} /> {t('Rotate the token')}</h4>
-        <p className="help">{t('Other browsers and dockera instances using this host via expose will need the new token.')}</p>
+        <p className="help">{t('Other browsers and ducktainer instances using this host via expose will need the new token.')}</p>
         {token && (
           <div className="token-box mono">
             <span className="ellipsis">{token}</span>
@@ -512,7 +512,7 @@ function SignIn({ info, draft, setAuth }: { info: AccessInfo; draft: Draft; setA
           <button
             className="btn btn-danger-ghost btn-sm"
             onClick={async () => {
-              if (!(await confirm({ title: t('Rotate token'), body: t('Other browsers and dockera instances using this host via expose will need the new token.'), danger: true, confirm: t('Rotate') }))) return
+              if (!(await confirm({ title: t('Rotate token'), body: t('Other browsers and ducktainer instances using this host via expose will need the new token.'), danger: true, confirm: t('Rotate') }))) return
               try {
                 setToken((await api.post('/settings/rotate-token')).token)
               } catch (e) {

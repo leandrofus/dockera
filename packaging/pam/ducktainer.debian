@@ -1,5 +1,5 @@
 #%PAM-1.0
-# dockera web login (Debian / Ubuntu)
+# ducktainer web login (Debian / Ubuntu)
 @include common-auth
 account    required     pam_nologin.so
 @include common-account

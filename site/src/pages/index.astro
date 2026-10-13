@@ -1,0 +1,11 @@
+---
+import Base from '../layouts/Base.astro'
+import Home from '../components/Home.astro'
+import { strings } from '../i18n'
+import { latestRelease } from '../release'
+
+const release = await latestRelease()
+---
+<Base lang="en" title={strings.en.title} description={strings.en.description}>
+  <Home lang="en" release={release} />
+</Base>

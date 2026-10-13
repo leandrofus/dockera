@@ -2,8 +2,8 @@ package server
 
 import (
 	"context"
-	"dockera/internal/access"
-	"dockera/internal/i18n"
+	"ducktainer/internal/access"
+	"ducktainer/internal/i18n"
 	"log"
 	"net"
 	"net/http"
@@ -15,10 +15,10 @@ import (
 	"sync"
 	"time"
 
-	"dockera/internal/agent"
-	"dockera/internal/auth"
-	"dockera/internal/config"
-	"dockera/internal/docker"
+	"ducktainer/internal/agent"
+	"ducktainer/internal/auth"
+	"ducktainer/internal/config"
+	"ducktainer/internal/docker"
 )
 
 type endpointStatus struct {

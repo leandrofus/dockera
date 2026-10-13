@@ -20,7 +20,7 @@ import (
 // DOCKER_HOST=ssh://. A ControlMaster socket keeps one SSH session alive so
 // each new HTTP connection is cheap.
 func sshDialer(u *url.URL, identity string) func(ctx context.Context) (net.Conn, error) {
-	ctlDir := filepath.Join(os.TempDir(), fmt.Sprintf("dockera-ssh-%d", os.Getuid()))
+	ctlDir := filepath.Join(os.TempDir(), fmt.Sprintf("ducktainer-ssh-%d", os.Getuid()))
 	_ = os.MkdirAll(ctlDir, 0o700)
 	return func(ctx context.Context) (net.Conn, error) {
 		args := SSHArgs(u, identity)

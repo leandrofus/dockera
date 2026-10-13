@@ -99,7 +99,7 @@ export interface Stack {
   editable: boolean
   reason?: string
   env_file?: string
-  // kept in its own directory instead of the dockera store
+  // kept in its own directory instead of the ducktainer store
   location?: StackLocation
   // files live on the remote node (compose runs there)
   node?: boolean

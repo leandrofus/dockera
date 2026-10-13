@@ -1,4 +1,4 @@
-/* dockera — CRM-style UI. Tokens first, components after. */
+/* ducktainer — CRM-style UI. Tokens first, components after. */
 :root {
   --bg: #fafafb;
   --surface: #ffffff;
@@ -202,6 +202,7 @@ input[type='checkbox'] { accent-color: var(--accent); width: 14px; height: 14px;
 .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; }
 .brand.big { font-size: 22px; }
 .brand.big .brand-mark { width: 36px; height: 36px; font-size: 18px; }
+.login-mark { width: 64px; height: auto; }
 .sidebar nav { display: flex; flex-direction: column; gap: 1px; }
 .nav-item {
   display: flex; align-items: center; gap: 10px; height: 32px; padding: 0 9px;

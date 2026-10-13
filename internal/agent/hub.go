@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"net"
 	"sync"
 	"time"
@@ -17,7 +17,7 @@ type Hub struct {
 	addrs    map[string]string // address each agent connected from
 }
 
-// DefaultHub is the singleton agent hub used by the dockera server and client.
+// DefaultHub is the singleton agent hub used by the ducktainer server and client.
 var DefaultHub = NewHub()
 
 func NewHub() *Hub {

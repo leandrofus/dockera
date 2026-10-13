@@ -13,18 +13,18 @@ import (
 	"net/url"
 	"time"
 
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 )
 
 // Besides proxying the Docker socket, an agent stream can carry a raw TCP
 // connection to a port on the agent's host:
 //
-//	GET /_dockera/dial?addr=127.0.0.1:5432 HTTP/1.1
+//	GET /_ducktainer/dial?addr=127.0.0.1:5432 HTTP/1.1
 //
 // answered by "HTTP/1.1 200 OK" and then the bytes of that connection. The
 // server uses it to probe and to tunnel ports of nodes behind NAT. Agents
 // that predate it forward the request to Docker, which answers 404.
-const dialPath = "/_dockera/dial"
+const dialPath = "/_ducktainer/dial"
 
 // ErrDialUnsupported means the agent is too old to dial.
 var ErrDialUnsupported = errors.New("agent does not support dialing (update it)")

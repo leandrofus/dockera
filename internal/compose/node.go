@@ -4,7 +4,7 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -19,8 +19,8 @@ import (
 	"sync"
 	"time"
 
-	"dockera/internal/config"
-	"dockera/internal/docker"
+	"ducktainer/internal/config"
+	"ducktainer/internal/docker"
 )
 
 // FS reads and writes stack files where they live: on this machine for the
@@ -35,7 +35,7 @@ type FS interface {
 	Remove(ctx context.Context, path string) error
 }
 
-// LocalFS is the filesystem of the machine running dockera.
+// LocalFS is the filesystem of the machine running ducktainer.
 type LocalFS struct{}
 
 func (LocalFS) ReadFile(_ context.Context, p string) ([]byte, error) { return os.ReadFile(p) }
@@ -73,7 +73,7 @@ func (LocalFS) Remove(_ context.Context, p string) error {
 const DefaultComposeImage = "docker:cli"
 
 const (
-	helperLabel = "dockera.helper"
+	helperLabel = "ducktainer.helper"
 	hostRoot    = "/host" // the node's / inside the files helper
 )
 
@@ -92,7 +92,7 @@ func dockerSocket(ep config.Endpoint) string {
 }
 
 // NodeFS reaches the node's filesystem through a long-lived helper container
-// (dockera-files) that mounts / at /host: files are read and written with
+// (ducktainer-files) that mounts / at /host: files are read and written with
 // the archive API and moved with exec. It exits by itself after an hour idle
 // and is recreated on demand.
 type NodeFS struct {
@@ -122,7 +122,7 @@ func ForNode(c *docker.Client, auth func(string) string) *NodeFS {
 	return n
 }
 
-const filesHelper = "dockera-files"
+const filesHelper = "ducktainer-files"
 
 // helper returns the id of the running files helper, creating it if needed.
 func (n *NodeFS) helper(ctx context.Context) (string, error) {
@@ -406,7 +406,7 @@ func (r *Runner) runOnNode(ctx context.Context, stdout, stderr io.Writer, dir st
 		"Image":      image,
 		"Entrypoint": cmd,
 		"WorkingDir": dir,
-		"Env":        []string{"DOCKER_HOST=unix:///var/run/docker.sock", "DOCKER_CONFIG=/dockera-config"},
+		"Env":        []string{"DOCKER_HOST=unix:///var/run/docker.sock", "DOCKER_CONFIG=/ducktainer-config"},
 		"Labels":     map[string]string{helperLabel: "compose"},
 		"HostConfig": map[string]any{
 			"Binds":       binds,
@@ -422,12 +422,12 @@ func (r *Runner) runOnNode(ctx context.Context, stdout, stderr io.Writer, dir st
 	id := created.ID
 	defer c.JSON(context.WithoutCancel(ctx), http.MethodDelete, "/containers/"+id, url.Values{"force": {"1"}}, nil, nil)
 
-	// registries configured in dockera
+	// registries configured in ducktainer
 	cfg, _ := json.Marshal(map[string]any{"auths": r.auths()})
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
-	tw.WriteHeader(&tar.Header{Name: "dockera-config/", Typeflag: tar.TypeDir, Mode: 0o700})
-	tw.WriteHeader(&tar.Header{Name: "dockera-config/config.json", Typeflag: tar.TypeReg, Mode: 0o600, Size: int64(len(cfg))})
+	tw.WriteHeader(&tar.Header{Name: "ducktainer-config/", Typeflag: tar.TypeDir, Mode: 0o700})
+	tw.WriteHeader(&tar.Header{Name: "ducktainer-config/config.json", Typeflag: tar.TypeReg, Mode: 0o600, Size: int64(len(cfg))})
 	tw.Write(cfg)
 	tw.Close()
 	if resp, err := c.Do(ctx, http.MethodPut, "/containers/"+id+"/archive", url.Values{"path": {"/"}}, &buf, nil); err == nil {

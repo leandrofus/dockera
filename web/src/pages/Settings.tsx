@@ -46,8 +46,8 @@ function AgentCommands({ name }: { name: string }) {
         <div style={{ marginTop: 4 }}>{box(cmds.manual)}</div>
       </details>
       <p className="help">{cmds.tls
-        ? tr('The commands pin this server\'s certificate: a node cannot be fed a different binary or server. The token only works for this host and is kept on the node in /etc/dockera-agent/agent.env (root only).')
-        : tr('This server is not using TLS: the token and the binary travel in clear. Serve dockera with TLS (or use --agent-listen) before enrolling nodes over an untrusted network.')}</p>
+        ? tr('The commands pin this server\'s certificate: a node cannot be fed a different binary or server. The token only works for this host and is kept on the node in /etc/ducktainer-agent/agent.env (root only).')
+        : tr('This server is not using TLS: the token and the binary travel in clear. Serve ducktainer with TLS (or use --agent-listen) before enrolling nodes over an untrusted network.')}</p>
     </div>
   )
 }
@@ -116,7 +116,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
           <select value={scheme} onChange={(e) => onSchemeChange(e.target.value)}>
             <option value="ssh">{tr('SSH (agentless)')}</option>
             <option value="agent">{tr('Agent (outbound / Edge)')}</option>
-            <option value="tcp">dockera expose (TCP + token)</option>
+            <option value="tcp">ducktainer expose (TCP + token)</option>
             <option value="unix">{tr('Local socket')}</option>
           </select>
         </label>
@@ -124,7 +124,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
         {scheme === 'ssh' && <label className="field span-2"><span>{tr('SSH key (optional)')}</span><input className="mono" placeholder={tr('~/.ssh/id_ed25519 (defaults to your SSH agent/config)')} value={f.ssh_key} onChange={(e) => setF({ ...f, ssh_key: e.target.value })} /></label>}
         {scheme === 'tcp' && (
           <>
-            <label className="field span-2"><span>{tr('Remote host token')}</span><input className="mono" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={tr('printed by `dockera expose` or `dockera token --rotate` on the host')} /></label>
+            <label className="field span-2"><span>{tr('Remote host token')}</span><input className="mono" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={tr('printed by `ducktainer expose` or `ducktainer token --rotate` on the host')} /></label>
             <label className="check"><input type="checkbox" checked={f.tls} onChange={(e) => setF({ ...f, tls: e.target.checked })} /> TLS</label>
             <label className="field"><span>{tr('TLS sha256 fingerprint (pinning)')}</span><input className="mono" value={f.fingerprint} onChange={(e) => setF({ ...f, fingerprint: e.target.value, tls: f.tls || !!e.target.value })} /></label>
           </>
@@ -150,15 +150,15 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
               <label className="field"><span>{tr('Docker socket on the node')}</span><input className="mono" placeholder="/var/run/docker.sock" value={f.docker_socket} onChange={(e) => setF({ ...f, docker_socket: e.target.value })} /></label>
               <label className="field"><span>{tr('Image with docker compose')}</span><input className="mono" placeholder="docker:cli" value={f.compose_image} onChange={(e) => setF({ ...f, compose_image: e.target.value })} /></label>
             </div>
-            <p className="help">{tr('To read, edit and deploy stacks that live in a directory of the node (e.g. /opt/myapp), dockera starts short-lived containers from this image there, mounting the directory and the Docker socket. Change the socket for rootless Docker (/run/user/1000/docker.sock) and the image for air-gapped nodes (a mirror of docker:cli).')}</p>
+            <p className="help">{tr('To read, edit and deploy stacks that live in a directory of the node (e.g. /opt/myapp), ducktainer starts short-lived containers from this image there, mounting the directory and the Docker socket. Change the socket for rootless Docker (/run/user/1000/docker.sock) and the image for air-gapped nodes (a mirror of docker:cli).')}</p>
           </details>
         )}
       </div>
       <div className="help">
         {scheme === 'ssh' && <>{tr('Uses your')} <code>ssh</code> {tr('client and runs')} <code>docker system dial-stdio</code> {tr('on the remote:')} <strong>{tr('nothing needs to be installed')}</strong> {tr('there. Requires key-based access (no interactive password) and a user allowed to use Docker.')}</>}
         {scheme === 'agent' && <>{tr('The standalone agent is downloaded directly from this server and connects outbound. Ideal for nodes behind NAT, firewalls or dynamic IPs.')}</>}
-        {scheme === 'tcp' && <>{tr('Without a fingerprint, the certificate presented when saving is pinned.')} {tr('On the remote host:')} <code>dockera expose --allow &lt;{tr('your-IP')}&gt;</code>{tr('. It prints the token and TLS fingerprint to paste here.')}</>}
-        {scheme === 'unix' && <>{tr('Docker socket of the machine running dockera.')}</>}
+        {scheme === 'tcp' && <>{tr('Without a fingerprint, the certificate presented when saving is pinned.')} {tr('On the remote host:')} <code>ducktainer expose --allow &lt;{tr('your-IP')}&gt;</code>{tr('. It prints the token and TLS fingerprint to paste here.')}</>}
+        {scheme === 'unix' && <>{tr('Docker socket of the machine running ducktainer.')}</>}
       </div>
     </Modal>
   )
@@ -172,7 +172,7 @@ function Hosts() {
     { label: tr('Open'), onClick: () => go(e.name, 'jump') },
     { label: tr('Edit…'), icon: <Pencil size={14} />, onClick: () => openDialog((c) => <EndpointDialog initial={e} onClose={c} />) },
     { label: tr('Copy URL'), icon: <ClipboardCopy size={14} />, onClick: () => copy(e.url) },
-    { label: tr('Copy docker-env command'), icon: <Terminal size={14} />, onClick: () => copy(`eval "$(dockera docker-env ${e.name})"`) },
+    { label: tr('Copy docker-env command'), icon: <Terminal size={14} />, onClick: () => copy(`eval "$(ducktainer docker-env ${e.name})"`) },
     ...(e.url.startsWith('agent://') ? [{
       label: tr('Copy agent install command'),
       icon: <ClipboardCopy size={14} />,
@@ -180,14 +180,14 @@ function Hosts() {
     }] : []),
     'sep' as const,
     { label: tr('Delete…'), icon: <Trash2 size={14} />, danger: true, onClick: async () => {
-      if (await confirm({ title: tr('Delete host {0}', e.name), body: tr('It is only removed from dockera; the host is not touched.'), danger: true, confirm: tr('Delete') }))
+      if (await confirm({ title: tr('Delete host {0}', e.name), body: tr('It is only removed from ducktainer; the host is not touched.'), danger: true, confirm: tr('Delete') }))
         api.del(`/endpoints/${enc(e.name)}`).then(() => invalidate('/endpoints')).catch(toast.err)
     } },
   ]
   return (
     <div>
       <div className="row gap section-head">
-        <p className="muted grow">{tr('Each host is a Docker daemon. dockera connects over SSH, via outbound agent, or to')} <code>dockera expose</code>.</p>
+        <p className="muted grow">{tr('Each host is a Docker daemon. ducktainer connects over SSH, via outbound agent, or to')} <code>ducktainer expose</code>.</p>
         <button className="btn" onClick={reload}>{loading ? <Spinner /> : <RefreshCw size={14} />}</button>
         <button className="btn btn-primary" onClick={() => openDialog((c) => <EndpointDialog onClose={c} />)}><Plus size={14} /> {tr('Add host')}</button>
       </div>
@@ -386,7 +386,7 @@ function Sources() {
   return (
     <div className="panel">
       <h4><Store size={14} /> {tr('Marketplace sources')}</h4>
-      <p className="muted small">{tr('Compatible with the Portainer app template format (v2/v3). Besides these, dockera ships its own built-in catalog.')}</p>
+      <p className="muted small">{tr('Compatible with the Portainer app template format (v2/v3). Besides these, ducktainer ships its own built-in catalog.')}</p>
       <ul className="source-list">
         {list.map((s, i) => (
           <li key={s.url}>
@@ -468,17 +468,17 @@ export function Login({ onDone }: { onDone: () => void }) {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <div className="brand big"><span className="brand-mark">d</span> dockera</div>
+        <div className="brand big"><img className="login-mark" src="/ducktainer-mark.svg" alt="" /> ducktainer</div>
         {mode === 'user' ? (
           <>
             <p className="muted">{tr('Sign in with your system user.')}</p>
-            <p className="help">{tr('No access yet? Ask an administrator to add your account to the dockera-admins (full access) or dockera-viewers (read-only) group.')}</p>
+            <p className="help">{tr('No access yet? Ask an administrator to add your account to the ducktainer-admins (full access) or ducktainer-viewers (read-only) group.')}</p>
             <input autoFocus autoComplete="username" placeholder={tr('user')} value={username} onChange={(e) => setUsername(e.target.value)} />
             <input type="password" autoComplete="current-password" placeholder={tr('password')} value={password} onChange={(e) => setPassword(e.target.value)} />
           </>
         ) : (
           <>
-            <p className="muted">{tr('Emergency access token:')} <code>sudo dockera token --rotate</code> {tr('on the server.')}</p>
+            <p className="muted">{tr('Emergency access token:')} <code>sudo ducktainer token --rotate</code> {tr('on the server.')}</p>
             <input className="mono" type="password" autoFocus placeholder="token" value={token} onChange={(e) => setToken(e.target.value)} />
           </>
         )}

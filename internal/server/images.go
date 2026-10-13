@@ -13,7 +13,7 @@ import (
 	"net/url"
 	"strings"
 
-	"dockera/internal/docker"
+	"ducktainer/internal/docker"
 )
 
 // splitImage returns registry host, repository (without tag) and tag.

@@ -16,8 +16,8 @@ import (
 	"sync"
 	"time"
 
-	"dockera/internal/access"
-	"dockera/internal/auth"
+	"ducktainer/internal/access"
+	"ducktainer/internal/auth"
 )
 
 // Ephemeral port forwards: the server listens on a port from TunnelPorts and

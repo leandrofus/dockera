@@ -1,4 +1,4 @@
-// Package config holds dockera's persistent settings: access token, allowed
+// Package config holds ducktainer's persistent settings: access token, allowed
 // hosts, docker endpoints, registries and marketplace sources.
 package config
 
@@ -19,9 +19,9 @@ import (
 type Endpoint struct {
 	Name string `json:"name"`
 	// URL is unix:///var/run/docker.sock, ssh://user@host[:port] or
-	// tcp://host:port (a remote `dockera expose`).
+	// tcp://host:port (a remote `ducktainer expose`).
 	URL string `json:"url"`
-	// Token for tcp endpoints exposed by `dockera expose`.
+	// Token for tcp endpoints exposed by `ducktainer expose`.
 	Token string `json:"token,omitempty"`
 	TLS   bool   `json:"tls,omitempty"`
 	// Fingerprint pins the remote certificate (sha256, hex). Empty with TLS
@@ -37,10 +37,10 @@ type Endpoint struct {
 }
 
 // Local reports whether the endpoint is the daemon of the machine running
-// dockera, so stack files are read and compose runs right here.
+// ducktainer, so stack files are read and compose runs right here.
 func (e Endpoint) Local() bool { return strings.HasPrefix(e.URL, "unix://") }
 
-// Agent reports whether the node connects to dockera with the outbound agent.
+// Agent reports whether the node connects to ducktainer with the outbound agent.
 func (e Endpoint) Agent() bool { return strings.HasPrefix(e.URL, "agent:") }
 
 type Registry struct {
@@ -91,10 +91,10 @@ type Auth struct {
 func DefaultAuth(pamAvailable bool) *Auth {
 	return &Auth{
 		PAM:          pamAvailable,
-		PAMService:   "dockera",
+		PAMService:   "ducktainer",
 		TokenLogin:   true,
-		AdminGroups:  []string{"docker", "dockera-admins"},
-		ViewerGroups: []string{"dockera-viewers"},
+		AdminGroups:  []string{"docker", "ducktainer-admins"},
+		ViewerGroups: []string{"ducktainer-viewers"},
 		SessionHours: 12,
 	}
 }
@@ -128,22 +128,22 @@ var DefaultTemplateSources = []TemplateSource{
 	{Name: "Lissy93 (community, ~800 apps)", URL: "https://raw.githubusercontent.com/Lissy93/portainer-templates/main/templates.json", Enabled: false},
 }
 
-// Dir returns the data directory: $DOCKERA_HOME, /var/lib/dockera for root,
-// or $XDG_CONFIG_HOME/dockera.
+// Dir returns the data directory: $DUCKTAINER_HOME, /var/lib/ducktainer for root,
+// or $XDG_CONFIG_HOME/ducktainer.
 func Dir() string {
-	if d := os.Getenv("DOCKERA_HOME"); d != "" {
+	if d := os.Getenv("DUCKTAINER_HOME"); d != "" {
 		return d
 	}
 	if os.Geteuid() == 0 {
-		return "/var/lib/dockera"
+		return "/var/lib/ducktainer"
 	}
-	if u, err := user.Current(); err == nil && u.Username == "dockera" {
-		return "/var/lib/dockera" // the packaged service user
+	if u, err := user.Current(); err == nil && u.Username == "ducktainer" {
+		return "/var/lib/ducktainer" // the packaged service user
 	}
 	if d, err := os.UserConfigDir(); err == nil {
-		return filepath.Join(d, "dockera")
+		return filepath.Join(d, "ducktainer")
 	}
-	return ".dockera"
+	return ".ducktainer"
 }
 
 func NewToken() string {
@@ -242,7 +242,7 @@ func (c *Config) decode(data []byte) error {
 		c.Auth = DefaultAuth(PAMAvailable)
 	}
 	if c.Auth.PAMService == "" {
-		c.Auth.PAMService = "dockera"
+		c.Auth.PAMService = "ducktainer"
 	}
 	if c.Auth.SessionHours <= 0 {
 		c.Auth.SessionHours = 12
@@ -320,7 +320,7 @@ func (c *Config) Update(fn func(c *Config) error) error {
 }
 
 // Watch reloads the config when the file is changed by someone else and
-// calls onChange afterwards (e.g. `sudo dockera allow add` while serving).
+// calls onChange afterwards (e.g. `sudo ducktainer allow add` while serving).
 func (c *Config) Watch(onChange func()) {
 	go func() {
 		for range time.Tick(3 * time.Second) {
@@ -345,7 +345,7 @@ func (c *Config) Watch(onChange func()) {
 	}()
 }
 
-// FixOwner gives files written by root (sudo dockera …) to the owner of
+// FixOwner gives files written by root (sudo ducktainer …) to the owner of
 // the data directory, so a service running as an unprivileged user can
 // still read them.
 func FixOwner(path string) {
