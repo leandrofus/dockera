@@ -7,6 +7,7 @@ export const LANGS: Lang[] = ['en', 'es', 'ru']
 export const langName: Record<Lang, string> = { en: 'English', es: 'Español', ru: 'Русский' }
 
 const en = {
+  language: 'Language',
   title: 'ducktainer — Docker management in one binary',
   description: 'Agentless Docker management in a single binary: web UI, compose stacks, marketplace, live logs and terminals. Sign in with your Linux users.',
   docs: 'Documentation',
@@ -67,6 +68,7 @@ const en = {
 export type Strings = typeof en
 
 const es: Strings = {
+  language: 'Idioma',
   title: 'ducktainer — administración de Docker en un solo binario',
   description: 'Administración de Docker sin agente en un único binario: UI web, stacks compose, marketplace, logs en vivo y terminales. Se entra con tus usuarios de Linux.',
   docs: 'Documentación',
@@ -125,6 +127,7 @@ const es: Strings = {
 }
 
 const ru: Strings = {
+  language: 'Язык',
   title: 'ducktainer — управление Docker в одном бинарнике',
   description: 'Управление Docker без агентов в одном бинарном файле: веб-интерфейс, стеки compose, каталог приложений, логи и терминалы в реальном времени. Вход под вашими пользователями Linux.',
   docs: 'Документация',
