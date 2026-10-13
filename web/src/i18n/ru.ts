@@ -1217,4 +1217,13 @@ export const ru: Record<string, string> = {
   "unit|s": "с",
   "unit|min": "мин",
   "unit|h": "ч",
+  "Host": "Хост",
+  "General": "Общие",
+  "Hostname": "Имя хоста",
+  "Test": "Команда проверки",
+  "Timeout": "Тайм-аут",
+  "Error": "Ошибка",
+  "Variables": "Переменные",
+  "No": "Нет",
+  "No ·": "Нет ·",
 }

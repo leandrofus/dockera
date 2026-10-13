@@ -158,6 +158,40 @@ func main() {
 	}
 }
 
+// newFlagSet is flag.NewFlagSet with -h output in the CLI language (the
+// flag package prints "Usage of" and "(default …)" in English).
+func newFlagSet(name string) *flag.FlagSet {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	fs.Usage = func() {
+		out := fs.Output()
+		i18n.Fprintf(out, "Usage of %s:\n", name)
+		fs.VisitAll(func(f *flag.Flag) {
+			var b strings.Builder
+			fmt.Fprintf(&b, "  -%s", f.Name)
+			kind, usage := flag.UnquoteUsage(f)
+			if kind != "" {
+				b.WriteString(" ")
+				b.WriteString(kind)
+			}
+			if b.Len() <= 4 {
+				b.WriteString("\t")
+			} else {
+				b.WriteString("\n    \t")
+			}
+			b.WriteString(strings.ReplaceAll(usage, "\n", "\n    \t"))
+			if d := f.DefValue; d != "" && d != "false" && d != "0" {
+				if kind == "string" {
+					b.WriteString(i18n.Sprintf(" (default %q)", d))
+				} else {
+					b.WriteString(i18n.Sprintf(" (default %v)", d))
+				}
+			}
+			fmt.Fprintln(out, b.String())
+		})
+	}
+	return fs
+}
+
 type listFlag []string
 
 func (l *listFlag) String() string { return strings.Join(*l, ",") }
@@ -229,7 +263,7 @@ func localClient(cfg *config.Config, host string) (*docker.Client, error) {
 }
 
 func cmdServe(args []string, openBrowser bool) error {
-	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	fs := newFlagSet("serve")
 	var o listenOpts
 	o.register(fs)
 	addr := fs.String("listen", "", i18n.Sprintf("listen address (default 127.0.0.1:9900, or 0.0.0.0:9900 when --allow is used)"))
@@ -380,7 +414,7 @@ func waitSignal(errc chan error) error {
 }
 
 func cmdAgent(args []string) error {
-	fs := flag.NewFlagSet("agent", flag.ExitOnError)
+	fs := newFlagSet("agent")
 	serverURL := fs.String("server", "", i18n.Sprintf("ducktainer server URL (e.g. https://ducktainer.example.com:9900)"))
 	token := fs.String("token", "", i18n.Sprintf("the host's agent token (or DUCKTAINER_AGENT_TOKEN)"))
 	name := fs.String("name", "", i18n.Sprintf("node name (defaults to hostname)"))
@@ -414,7 +448,7 @@ func cmdAgent(args []string) error {
 }
 
 func cmdExpose(args []string) error {
-	fs := flag.NewFlagSet("expose", flag.ExitOnError)
+	fs := newFlagSet("expose")
 	var o listenOpts
 	o.register(fs)
 	addr := fs.String("listen", ":2376", i18n.Sprintf("listen address"))
@@ -473,8 +507,8 @@ func hostname() string {
 
 // withClient parses -e and runs fn with the endpoint's client.
 func withClient(name string, args []string, fn func(ctx context.Context, c *docker.Client, rest []string) error, extra ...func(*flag.FlagSet)) error {
-	fs := flag.NewFlagSet(name, flag.ExitOnError)
-	ep := fs.String("e", "local", "endpoint")
+	fs := newFlagSet(name)
+	ep := fs.String("e", "local", i18n.Sprintf("host to use (see: ducktainer endpoint ls)"))
 	for _, f := range extra {
 		f(fs)
 	}
@@ -632,7 +666,7 @@ func cmdEndpoint(args []string) error {
 	}
 	switch args[0] {
 	case "add":
-		fs := flag.NewFlagSet("endpoint add", flag.ExitOnError)
+		fs := newFlagSet("endpoint add")
 		token := fs.String("token", "", i18n.Sprintf("token of the remote `ducktainer expose`"))
 		useTLS := fs.Bool("tls", false, i18n.Sprintf("use TLS"))
 		fp := fs.String("fingerprint", "", i18n.Sprintf("sha256 fingerprint of the remote certificate"))
@@ -714,7 +748,7 @@ func cmdRegistry(args []string) error {
 		if len(args) < 4 {
 			return i18n.Errorf("usage: echo $PASS | ducktainer registry add <name> <server> <user> [--hosts h1,h2]")
 		}
-		fs := flag.NewFlagSet("registry add", flag.ExitOnError)
+		fs := newFlagSet("registry add")
 		var hosts listFlag
 		fs.Var(&hosts, "hosts", i18n.Sprintf("only hand these credentials to these hosts (default: all)"))
 		fs.Parse(args[4:])
@@ -861,7 +895,7 @@ func cmdInstall(args []string) error {
 }
 
 func cmdPAMHelper(args []string) error {
-	fs := flag.NewFlagSet("pam-helper", flag.ExitOnError)
+	fs := newFlagSet("pam-helper")
 	service := fs.String("service", "ducktainer", i18n.Sprintf("PAM service"))
 	fs.Parse(args)
 	return auth.ServeHelper(*service, os.Stdin, os.Stdout)
@@ -889,7 +923,7 @@ func cmdAuth(args []string) error {
 		i18n.Printf("session duration:    %dh\n", a.SessionHours)
 		return nil
 	case "set":
-		fs := flag.NewFlagSet("auth set", flag.ExitOnError)
+		fs := newFlagSet("auth set")
 		pam := fs.String("pam", "", "on|off")
 		tok := fs.String("token-login", "", "on|off")
 		root := fs.String("allow-root", "", "on|off")
@@ -973,7 +1007,7 @@ func cmdAuth(args []string) error {
 }
 
 func cmdSetup(args []string) error {
-	fs := flag.NewFlagSet("setup", flag.ExitOnError)
+	fs := newFlagSet("setup")
 	socket := fs.String("socket", "", i18n.Sprintf("daemon socket (detected by default)"))
 	dry := fs.Bool("dry-run", false, i18n.Sprintf("only show what would be done"))
 	noRestart := fs.Bool("no-restart", false, i18n.Sprintf("do not restart ducktainer.service"))
@@ -1041,7 +1075,7 @@ func cmdEngine(args []string) error {
 	if len(args) == 0 || (args[0] != "install" && args[0] != "status") {
 		return i18n.Errorf("usage: ducktainer engine install [--mode wsl|native] [--distro NAME] [--version X.Y.Z] [--sha256 HASH] [--no-keepalive] | status")
 	}
-	fs := flag.NewFlagSet("engine", flag.ExitOnError)
+	fs := newFlagSet("engine")
 	mode := fs.String("mode", "wsl", i18n.Sprintf("wsl: Linux containers in a WSL 2 distribution · native: Windows containers with dockerd.exe"))
 	distro := fs.String("distro", engine.DefaultDistro, i18n.Sprintf("WSL distribution created for Docker"))
 	ver := fs.String("version", "", i18n.Sprintf("Docker version for native mode (default: the latest)"))
