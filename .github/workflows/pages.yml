@@ -1,7 +1,9 @@
 name: Pages
 
 # The Astro site in site/ reads the latest release at build time, so it is
-# rebuilt whenever a release is published as well as when it changes.
+# rebuilt whenever a release is published as well as when it changes. The
+# github-pages environment only accepts main, so a release (whose ref is its
+# tag) re-dispatches this workflow on main instead of deploying itself.
 on:
   push:
     branches: [main]
@@ -14,14 +16,23 @@ permissions:
   contents: read
   pages: write
   id-token: write
-
-concurrency:
-  group: pages
-  cancel-in-progress: true
+  actions: write # to re-dispatch on main for releases
 
 jobs:
-  deploy:
+  redispatch:
+    if: github.event_name == 'release'
     runs-on: ubuntu-latest
+    steps:
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh workflow run pages.yml --repo "$GITHUB_REPOSITORY" --ref main
+
+  deploy:
+    if: github.event_name != 'release'
+    runs-on: ubuntu-latest
+    concurrency:
+      group: pages
+      cancel-in-progress: true
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
