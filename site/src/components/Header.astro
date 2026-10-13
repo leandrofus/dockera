@@ -1,18 +1,18 @@
 ---
 import Icon from './Icon.astro'
-import { strings, type Lang } from '../i18n'
+import { LANGS, langName, strings, type Lang } from '../i18n'
 import { REPO_URL, docsPath, homePath } from '../paths'
 import ship from '../assets/ship.png'
 
 interface Props {
   lang: Lang
-  /** The same page in the other language. */
-  otherHref: string
+  /** The same page in every language. */
+  alternates: Record<Lang, string>
   /** Sits on the dark hero instead of the page background. */
   onHero?: boolean
   active?: 'docs'
 }
-const { lang, otherHref, onHero = false, active } = Astro.props
+const { lang, alternates, onHero = false, active } = Astro.props
 const t = strings[lang]
 ---
 <header class:list={['top', { 'on-hero': onHero }]}>
@@ -25,6 +25,10 @@ const t = strings[lang]
     <a href={docsPath(lang)} aria-current={active === 'docs' ? 'page' : undefined}>{t.docs}</a>
     <a class="hide-sm" href={`${REPO_URL}/releases`}>{t.releases}</a>
     <a href={REPO_URL} aria-label="GitHub"><Icon name="github" /></a>
-    <a class="lang" href={otherHref} hreflang={lang === 'en' ? 'es' : 'en'}>{t.otherLang}</a>
+    {LANGS.filter((l) => l !== lang).map((l) => (
+      <a class="lang" href={alternates[l]} hreflang={l} lang={l} title={langName[l]}>
+        <span class="lang-name">{langName[l]}</span><span class="lang-code">{l.toUpperCase()}</span>
+      </a>
+    ))}
   </nav>
 </header>

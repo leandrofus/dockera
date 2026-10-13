@@ -3,7 +3,7 @@ import { render } from 'astro:content'
 import Base from '../layouts/Base.astro'
 import Header from './Header.astro'
 import Footer from './Footer.astro'
-import { strings, type Lang } from '../i18n'
+import { LANGS, strings, type Lang } from '../i18n'
 import { REPO_URL, docsPath } from '../paths'
 import { slugOf, type Doc } from '../docs'
 
@@ -14,8 +14,8 @@ interface Props {
 }
 const { lang, doc, pages } = Astro.props
 const t = strings[lang]
-const other: Lang = lang === 'en' ? 'es' : 'en'
 const slug = slugOf(doc)
+const alternates = Object.fromEntries(LANGS.map((l) => [l, docsPath(l, slug)])) as Record<Lang, string>
 const { Content, headings } = await render(doc)
 const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
 const i = pages.indexOf(doc)
@@ -23,8 +23,8 @@ const prev = pages[i - 1]
 const next = pages[i + 1]
 const editUrl = `${REPO_URL}/edit/main/site/src/content/docs/${doc.id}.md`
 ---
-<Base lang={lang} title={`${doc.data.title} · ducktainer`} description={doc.data.description} otherHref={docsPath(other, slug)}>
-  <Header lang={lang} otherHref={docsPath(other, slug)} active="docs" />
+<Base lang={lang} title={`${doc.data.title} · ducktainer`} description={doc.data.description} alternates={alternates}>
+  <Header lang={lang} alternates={alternates} active="docs" />
   <div class="wrap docs">
     <aside class="docs-side">
       <details class="docs-menu" open>

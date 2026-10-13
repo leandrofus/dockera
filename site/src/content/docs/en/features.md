@@ -35,7 +35,7 @@ Who uses each volume, orphans, sizes, and browsing their contents.
 
 ## Marketplace
 
-About 26 built-in apps plus any Portainer v2/v3 template list. The official and community lists, around 800 apps, are preconfigured. Each app deploys as a stack you can edit.
+About 26 built-in apps plus any Portainer v2/v3 template list. Portainer's official list is enabled by default; the community list (around 800 apps) is preconfigured but off. Each app deploys as a stack you can edit.
 
 ## Tunnels
 

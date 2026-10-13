@@ -35,7 +35,7 @@ Quién usa cada volumen, huérfanos, tamaños y navegación por su contenido.
 
 ## Marketplace
 
-Unas 26 apps incluidas más cualquier lista de plantillas de Portainer v2/v3. Las listas oficial y de la comunidad, unas 800 apps, vienen preconfiguradas. Cada app se despliega como un stack editable.
+Unas 26 apps incluidas más cualquier lista de plantillas de Portainer v2/v3. La lista oficial de Portainer viene activada; la de la comunidad (unas 800 apps) viene configurada pero desactivada. Cada app se despliega como un stack editable.
 
 ## Túneles
 

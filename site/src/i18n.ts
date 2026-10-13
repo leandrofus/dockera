@@ -1,5 +1,10 @@
-// Page copy in English and Spanish; /ducktainer/ is English, /ducktainer/es/ Spanish.
-export type Lang = 'en' | 'es'
+// Page copy per language: /ducktainer/ is English, /ducktainer/<lang>/ the others.
+export type Lang = 'en' | 'es' | 'ru'
+
+export const LANGS: Lang[] = ['en', 'es', 'ru']
+
+/** Each language's name in itself, for the language switch. */
+export const langName: Record<Lang, string> = { en: 'English', es: 'Español', ru: 'Русский' }
 
 const en = {
   title: 'ducktainer — Docker management in one binary',
@@ -7,7 +12,6 @@ const en = {
   docs: 'Documentation',
   releases: 'Releases',
   issues: 'Report a problem',
-  otherLang: 'Español',
   squeak: 'Containerized applications with a squeak.',
   headline: 'Docker management in one binary',
   ctaInstall: 'Install',
@@ -68,7 +72,6 @@ const es: Strings = {
   docs: 'Documentación',
   releases: 'Versiones',
   issues: 'Reportar un problema',
-  otherLang: 'English',
   squeak: 'Aplicaciones en contenedores, con un cuac.',
   headline: 'Administración de Docker en un solo binario',
   ctaInstall: 'Instalar',
@@ -121,4 +124,62 @@ const es: Strings = {
   foot: 'ducktainer es software libre.',
 }
 
-export const strings: Record<Lang, Strings> = { en, es }
+const ru: Strings = {
+  title: 'ducktainer — управление Docker в одном бинарнике',
+  description: 'Управление Docker без агентов в одном бинарном файле: веб-интерфейс, стеки compose, каталог приложений, логи и терминалы в реальном времени. Вход под вашими пользователями Linux.',
+  docs: 'Документация',
+  releases: 'Релизы',
+  issues: 'Сообщить о проблеме',
+  squeak: 'Приложения в контейнерах, с писком.',
+  headline: 'Управление Docker в одном бинарнике',
+  ctaInstall: 'Установить',
+  ctaGithub: 'Смотреть на GitHub',
+  latest: 'Последний релиз',
+  nav: 'Основное',
+  docsNav: 'Страницы документации',
+  onThisPage: 'На этой странице',
+  prev: 'Предыдущая',
+  next: 'Следующая',
+  editPage: 'Редактировать эту страницу',
+  menu: 'Меню',
+  version: 'Версия',
+  shipsAs: 'Поставляется как',
+  shipsAsValue: 'один бинарный файл, rpm и deb',
+  runsOn: 'Работает на',
+  lede: 'Управляйте хостами Docker из браузера. Контейнеры, стеки compose, образы, логи и терминалы — с входом под теми пользователями Linux, которые у вас уже есть.',
+  installTitle: 'Установите его',
+  installSub: 'Docker должен быть уже установлен. Пакет настраивает службу на http://127.0.0.1:9900.',
+  system: 'Система',
+  arch: 'Архитектура',
+  binary: 'Бинарный файл Linux',
+  copy: 'Скопировать',
+  copied: 'Скопировано',
+  afterPkg: 'Затем откройте <code>http://127.0.0.1:9900</code> и войдите под пользователем из группы <code>docker</code> или <code>ducktainer-admins</code>.',
+  afterBin: 'Без PAM: войдите с токеном, который выводится при запуске. Для системных пользователей используйте пакет rpm или deb. В Windows <code>engine install</code> устанавливает Docker без Docker Desktop (запускайте от имени администратора; <code>--mode native</code> — для контейнеров Windows).',
+  noRelease: 'Скачайте последнюю версию на <a href="https://github.com/leandrofus/ducktainer/releases/latest">странице релизов</a>.',
+  featuresTitle: 'Что вы получаете в браузере',
+  features: [
+    ['Контейнеры', 'Таблица, сгруппированная по стекам, или доска по состояниям. У каждого контейнера есть CPU и память в реальном времени, логи, терминал, файлы, процессы и настройки. Изменение пересоздаёт контейнер безопасно и восстанавливает исходный, если что-то пошло не так.'],
+    ['Стеки compose', 'Визуальный редактор, который сохраняет ваш YAML, комментарии и переменные, многофайловые проекты, проверку перед сохранением и объединённые логи. Стеки, запущенные вне ducktainer, обнаруживаются и редактируются там, где они есть.'],
+    ['Образы, сети и тома', 'Загрузка и отправка с прогрессом по слоям, сборка из Dockerfile, просмотр того, какие контейнеры используют каждую сеть и том, и очистка всего, что никем не используется.'],
+    ['Каталог приложений', 'Около 26 встроенных приложений и любые списки шаблонов Portainer, готовые к развёртыванию в виде редактируемого стека.'],
+    ['Ваши пользователи Linux', 'Пользователи входят под системной учётной записью через PAM. Их группы определяют, администрируют они или только читают. Удаление из группы отзывает доступ в течение нескольких минут.'],
+    ['Журнал аудита', 'Каждый вход, изменение и сеанс терминала записывается — в интерфейсе и в журнале systemd.'],
+  ],
+  hostsTitle: 'Доступ к каждому хосту без лишних агентов',
+  hosts: [
+    ['SSH', 'На хосте ничего не нужно устанавливать: ducktainer использует ваши ключи SSH и уже установленный там Docker CLI.', 'ducktainer endpoint add prod ssh://deploy@prod'],
+    ['Исходящий агент', 'Для хостов за NAT или файрволом. Хост сам подключается к ducktainer с токеном, который работает только для него.', 'Настройки → Хосты → Агент'],
+    ['ducktainer expose', 'Открывает только API Docker хоста — за списком разрешённых адресов, токеном и закреплённым сертификатом TLS.', 'ducktainer expose --allow 10.0.0.5'],
+  ],
+  secureTitle: 'Создан для работы рядом с продакшеном',
+  secure: [
+    'Подключиться может только сама машина, пока вы не разрешите адреса; остальные отсекаются до TLS.',
+    'Секреты в конфигурации шифруются ключом, который хранится вне каталога данных, а токен доступа хранится только в виде хеша.',
+    'Служба работает от непривилегированного пользователя; проверка паролей выполняется через небольшой вспомогательный root-процесс, который запускается по требованию.',
+    'Агенты, удалённые хосты и реестры получают только те учётные данные, которые им нужны.',
+  ],
+  foot: 'ducktainer — программа с открытым исходным кодом.',
+}
+
+export const strings: Record<Lang, Strings> = { en, es, ru }

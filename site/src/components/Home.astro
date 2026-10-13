@@ -4,7 +4,7 @@ import Header from './Header.astro'
 import Footer from './Footer.astro'
 import Install from './Install.astro'
 import Icon from './Icon.astro'
-import { strings, type Lang } from '../i18n'
+import { LANGS, strings, type Lang } from '../i18n'
 import type { Release } from '../release'
 import { REPO_URL, docsPath, homePath } from '../paths'
 import logoDark from '../assets/logo-dark.png'
@@ -15,13 +15,14 @@ interface Props {
 }
 const { lang, release } = Astro.props
 const t = strings[lang]
+const homeAlternates = Object.fromEntries(LANGS.map((l) => [l, homePath(l)])) as Record<Lang, string>
 // the hero is always dark, so it always shows the logo with light lettering
 const logo = await getImage({ src: logoDark, format: 'webp', quality: 92 })
 const featureIcons = ['box', 'layers', 'disk', 'grid', 'users', 'history']
 const hostIcons = ['key', 'outbound', 'shield']
 ---
 <div class="hero">
-  <Header lang={lang} otherHref={homePath(lang === 'en' ? 'es' : 'en')} onHero />
+  <Header lang={lang} alternates={homeAlternates} onHero />
   <div class="wrap hero-in">
     <div class="hero-text">
       {release && (

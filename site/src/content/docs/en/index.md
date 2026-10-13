@@ -13,7 +13,7 @@ People sign in with their **system users** (PAM). Network access is limited to t
 - **No agents required.** Remote hosts are reached over **SSH** (`docker system dial-stdio`, like `DOCKER_HOST=ssh://`) or through `ducktainer expose`. They only need Docker. For hosts behind NAT there is an optional outbound agent.
 - **Least privilege.** The service runs as an unprivileged user. `ducktainer setup` adapts it to however Docker is installed: socket group, rootless or root-only. Only password checks run as root, in a helper started on demand.
 - **Access control.** An IP/CIDR/hostname allowlist drops connections before TLS. Roles come from POSIX groups. TLS is automatic, with certificate pinning, and every action goes to an audit log.
-- **Languages.** English and Spanish. The UI follows the browser and can be switched from the user menu; the CLI follows `LANG`.
+- **Languages.** English, Spanish and Russian. The UI follows the browser and can be switched from the user menu; the CLI follows `LANG`.
 
 ## Where to start
 

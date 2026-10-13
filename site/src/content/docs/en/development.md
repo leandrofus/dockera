@@ -37,6 +37,7 @@ English is the source language. To add a language:
 
 1. Copy `web/src/i18n/es.ts` (UI) and `internal/i18n/es.go` (API errors and CLI). Keys are the English strings; `ctx|text` keys are gender/number variants used by `tc()`.
 2. Register the new catalog in `web/src/i18n/index.ts` and `internal/i18n/i18n.go`.
+3. Run `make test`: `internal/i18n/catalog_test.go` fails if a catalog lacks a message the code translates, or keeps one the code no longer uses.
 
 ## Releases
 

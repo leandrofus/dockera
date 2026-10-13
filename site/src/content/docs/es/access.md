@@ -11,7 +11,7 @@ Las cuentas son usuarios normales del sistema, locales o de LDAP/SSSD/FreeIPA. E
 | Rol | Grupos (por defecto) | Puede |
 |---|---|---|
 | **Administrador** | `ducktainer-admins`, `docker` | todo: contenedores, stacks, imágenes, terminales, configuración y usuarios |
-| **Solo lectura** | `ducktainer-viewers` | ver todo salvo la configuración, sin modificar nada, abrir terminales ni descargar archivos |
+| **Solo lectura** | `ducktainer-viewers` | ver contenedores, stacks, imágenes, redes, volúmenes y hosts; no puede modificar nada, abrir terminales, explorar ni descargar archivos, ni ver el resto de la configuración. Las contraseñas de las cadenas de conexión se ocultan |
 
 ```sh
 sudo useradd -m ana && sudo passwd ana       # solo si la cuenta no existe
@@ -21,7 +21,7 @@ sudo ducktainer auth test ana                # comprueba la contraseña y muestr
 
 - La pertenencia a los grupos se revisa cada 5 minutos: si quitas a alguien de un grupo, pierde el acceso enseguida.
 - `root` no puede entrar salvo que actives `allow_root`.
-- La UI lo muestra en **Configuración → Acceso → Quién puede entrar**: los grupos de cada rol, sus miembros actuales y una guía que te escribe estos comandos.
+- La UI lo muestra en **Configuración → Acceso → Personas**: los grupos de cada rol, sus miembros actuales y una guía que te escribe estos comandos.
 
 ## Abrirlo a la red
 
@@ -33,7 +33,7 @@ sudo systemctl restart ducktainer       # ahora escucha en 0.0.0.0:9900, con TLS
 ```
 
 - Cualquier otro origen se desconecta antes del TLS. La propia máquina siempre está permitida.
-- En **Configuración → Acceso → Desde dónde** ves la dirección de escucha, tu IP y la regla que te deja pasar. Puedes editar la lista ahí y los cambios se aplican al instante. También puedes comprobar si una dirección estaría permitida.
+- En **Configuración → Acceso → Red** ves la dirección de escucha, tu IP y la regla que te deja pasar. Puedes editar la lista ahí y los cambios se aplican al instante. También puedes comprobar si una dirección estaría permitida.
 - El certificado TLS es autofirmado. Su huella SHA-256 se imprime al arrancar para que los clientes puedan fijarla. Para usar tu propio certificado, pasa `--cert/--key` en `/etc/ducktainer/ducktainer.env`.
 
 ## Entrar

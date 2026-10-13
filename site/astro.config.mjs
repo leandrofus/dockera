@@ -8,7 +8,7 @@ export default defineConfig({
   publicDir: '../assets/brand',
   i18n: {
     defaultLocale: 'en',
-    locales: ['en', 'es'],
+    locales: ['en', 'es', 'ru'],
     routing: { prefixDefaultLocale: false },
   },
 })

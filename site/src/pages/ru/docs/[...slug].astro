@@ -1,0 +1,10 @@
+---
+import DocsPage from '../../../components/DocsPage.astro'
+import { docsPaths } from '../../../docs'
+
+export function getStaticPaths() {
+  return docsPaths('ru')
+}
+const { doc, pages } = Astro.props
+---
+<DocsPage lang="ru" doc={doc} pages={pages} />
