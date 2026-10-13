@@ -14,7 +14,26 @@ export function setUnauthorizedHandler(fn: () => void) {
   onUnauthorized = fn
 }
 
-async function request<T>(method: string, path: string, body?: unknown): Promise<T> {
+export interface RequestOpts {
+  /** Title in the tasks tray; false keeps the request out of it. */
+  task?: string | false
+}
+
+// Every mutating request is shown as a task (see ui/overlays).
+type Tracker = (method: string, path: string, p: Promise<unknown>, title?: string) => void
+let tracker: Tracker | null = null
+export function setTaskTracker(fn: Tracker) {
+  tracker = fn
+}
+const untracked = ['/login', '/logout', '/settings/access/test']
+
+function request<T>(method: string, path: string, body?: unknown, opts: RequestOpts = {}): Promise<T> {
+  const p = send<T>(method, path, body)
+  if (method !== 'GET' && opts.task !== false && tracker && !untracked.includes(path)) tracker(method, path, p, opts.task || undefined)
+  return p
+}
+
+async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch('/api' + path, {
     method,
     headers: { 'X-Dockera': '1', 'X-Lang': getLang(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
@@ -35,9 +54,9 @@ async function request<T>(method: string, path: string, body?: unknown): Promise
 
 export const api = {
   get: <T = any>(p: string) => request<T>('GET', p),
-  post: <T = any>(p: string, body: unknown = {}) => request<T>('POST', p, body),
-  put: <T = any>(p: string, body: unknown = {}) => request<T>('PUT', p, body),
-  del: <T = any>(p: string) => request<T>('DELETE', p),
+  post: <T = any>(p: string, body: unknown = {}, opts?: RequestOpts) => request<T>('POST', p, body, opts),
+  put: <T = any>(p: string, body: unknown = {}, opts?: RequestOpts) => request<T>('PUT', p, body, opts),
+  del: <T = any>(p: string, opts?: RequestOpts) => request<T>('DELETE', p, undefined, opts),
 }
 
 export const enc = encodeURIComponent

@@ -3,7 +3,8 @@ import { useEffect, useRef, useState } from 'react'
 import type { ReactNode } from 'react'
 import { createPortal } from 'react-dom'
 import { CheckCircle2, ChevronDown, ChevronUp, Loader2, X, XCircle, AlertTriangle, Info } from 'lucide-react'
-import { stream } from '../lib/api'
+import { setTaskTracker, stream } from '../lib/api'
+import { taskTitle } from '../lib/tasks'
 import { bytes } from '../lib/format'
 
 // ---------- tiny global bus ----------
@@ -220,6 +221,8 @@ export interface Job {
   lines: string[]
   layers: Record<string, Layer>
   error?: string
+  // one-line result shown next to the title (e.g. space reclaimed)
+  summary?: string
   open: boolean
   started: number
 }
@@ -271,6 +274,22 @@ export function runJob(title: string, method: string, path: string, body?: unkno
     })
 }
 
+/** Shows a plain (non-streaming) request in the tray while it runs. */
+export function trackTask<T>(title: string, p: Promise<T>): Promise<T> {
+  const id = ++jid
+  jobs.set([{ id, title, state: 'running' as const, lines: [], layers: {}, open: false, started: Date.now() }, ...jobs.get()].slice(0, 30))
+  p.then(
+    (r: any) => {
+      // prune results: { SpaceReclaimed } or one per kind
+      const freed = r && typeof r === 'object' ? [r, ...Object.values(r)].reduce((a: number, x: any) => a + (x && typeof x === 'object' ? x.SpaceReclaimed || 0 : 0), 0) : 0
+      updateJob(id, (j) => ({ ...j, state: 'done', summary: freed ? tr('{0} reclaimed', bytes(freed)) : undefined }))
+    },
+    (err) => updateJob(id, (j) => ({ ...j, state: 'error', error: err?.message || String(err) })),
+  )
+  return p
+}
+setTaskTracker((method, path, p, title) => void trackTask(title || taskTitle(method, path), p))
+
 function JobsTray() {
   const list = jobs.use()
   const [collapsed, setCollapsed] = useState(false)
@@ -310,6 +329,8 @@ function JobsTray() {
                 <div className="job-title" onClick={() => updateJob(j.id, (x) => ({ ...x, open: !x.open }))}>
                   {j.state === 'running' ? <Loader2 size={14} className="spin" /> : j.state === 'done' ? <CheckCircle2 size={14} className="tone-ok" /> : <XCircle size={14} className="tone-bad" />}
                   <span className="ellipsis">{j.title}</span>
+                  {j.summary && <span className="muted small">{j.summary}</span>}
+                  {j.state === 'error' && !j.open && j.error && <span className="tone-bad small ellipsis" title={j.error}>{j.error}</span>}
                   {ls.length > 0 && j.state === 'running' && <span className="muted small">{total ? `${bytes(cur)} / ${bytes(total)}` : `${ls.length} capas`}</span>}
                 </div>
                 {ls.length > 0 && j.state === 'running' && (

@@ -28,7 +28,6 @@ function Kpi({ icon, label, value, sub, onClick, tone }: { icon: React.ReactNode
 
 function PruneDialog({ ep, onClose }: { ep: string; onClose: () => void }) {
   const [o, setO] = useState({ containers: true, images: true, all_images: false, networks: true, volumes: false, build_cache: true })
-  const [busy, setBusy] = useState(false)
   const opts: [keyof typeof o, string][] = [
     ['containers', tr('Stopped containers')],
     ['images', tr('Untagged images')],
@@ -40,19 +39,17 @@ function PruneDialog({ ep, onClose }: { ep: string; onClose: () => void }) {
   return (
     <Modal title={tr('Clean up system')} icon={<Trash2 size={18} />} onClose={onClose} footer={<>
       <button className="btn" onClick={onClose}>{tr('Cancel')}</button>
-      <button className="btn btn-danger" disabled={busy} onClick={async () => {
-        setBusy(true)
-        try {
-          const r = await api.post(`/e/${enc(ep)}/prune`, o)
-          const freed = Object.values(r as Record<string, any>).reduce((a, x) => a + (x?.SpaceReclaimed || 0), 0)
-          toast.ok(tr('Cleanup done: {0} reclaimed', bytes(freed)))
-          onClose()
-        } catch (e) {
-          toast.err(e)
-        } finally {
-          setBusy(false)
-          invalidate()
-        }
+      <button className="btn btn-danger" onClick={() => {
+        // runs in the background: progress and result stay in the tasks tray
+        onClose()
+        api
+          .post(`/e/${enc(ep)}/prune`, o)
+          .then((r) => {
+            const freed = Object.values(r as Record<string, any>).reduce((a, x) => a + (x?.SpaceReclaimed || 0), 0)
+            toast.ok(tr('Cleanup done: {0} reclaimed', bytes(freed)))
+          })
+          .catch((e) => toast.err(e))
+          .finally(() => invalidate())
       }}>{tr('Clear')}</button>
     </>}>
       <div className="checks col">
