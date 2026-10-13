@@ -92,7 +92,7 @@ sudo systemctl restart dockera       # now it listens on 0.0.0.0:9900, with TLS
 
 Open `https://<server>:9900` and sign in with your system user and password.
 
-The **emergency token** signs in as administrator and authorizes the API (`Authorization: Bearer`). Show it with `sudo dockera token`. To allow only system users, disable it with `sudo dockera auth set --token-login off`.
+The **emergency token** signs in as administrator and authorizes the API (`Authorization: Bearer`). Only its hash is stored, so it is shown once: `sudo dockera token --rotate` creates and prints a new one. To allow only system users, disable it with `sudo dockera auth set --token-login off`.
 
 ### 6. Add more Docker hosts (optional)
 
@@ -142,7 +142,7 @@ Hosts can also be managed from **Settings → Hosts**, and you switch between th
 | `dockera setup [--dry-run]` | Adapt the service to the Docker installation |
 | `dockera auth show \| set … \| test <user>` | System-user sign-in and role mapping |
 | `dockera allow ls \| add \| rm` | Network allowlist |
-| `dockera token [--rotate]` | Emergency/API token |
+| `dockera token --rotate` | New emergency/API token (only its hash is stored) |
 | `dockera endpoint ls \| add \| rm` | Docker hosts (`unix://`, `ssh://user@host`, `tcp://host:2376`, `agent://name`) |
 | `dockera registry ls \| add \| rm` | Private registry credentials |
 | `dockera ps \| logs \| sh` | Containers by stack · logs of a container or a whole stack · interactive shell (picks bash/ash/sh) |
@@ -156,6 +156,9 @@ Hosts can also be managed from **Settings → Hosts**, and you switch between th
 | `/etc/pam.d/dockera` | PAM stack for sign-in (`password-auth` on RHEL, `common-auth` on Debian) |
 | `/var/lib/dockera/` | configuration, stacks, audit log, TLS certificate, the service's SSH keys |
 | `/etc/systemd/system/dockera.service.d/10-docker-access.conf` | written by `dockera setup` |
+| `/etc/dockera/secret.key` | key that encrypts the secrets in the configuration (root-only, passed to the service with systemd `LoadCredential`) |
+
+Secrets in `config.json` (session secret, host tokens, registry passwords) are encrypted with AES-256-GCM, and the emergency token is stored only as a SHA-256 hash. The key is kept apart from the data, so a copy or backup of `/var/lib/dockera` reveals nothing without it. Back up `/etc/dockera/secret.key` separately: without it the configuration cannot be read. For a binary run without the package, the key is `secret.key` in the data directory, unless `DOCKERA_KEY_FILE` points elsewhere. Plaintext configurations from earlier versions are encrypted on first start.
 
 ## Translations
 

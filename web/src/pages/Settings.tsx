@@ -86,7 +86,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
         {scheme === 'ssh' && <label className="field span-2"><span>{tr('SSH key (optional)')}</span><input className="mono" placeholder={tr('~/.ssh/id_ed25519 (defaults to your SSH agent/config)')} value={f.ssh_key} onChange={(e) => setF({ ...f, ssh_key: e.target.value })} /></label>}
         {scheme === 'tcp' && (
           <>
-            <label className="field span-2"><span>{tr('Remote host token')}</span><input className="mono" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={tr('output of `dockera token` on the host')} /></label>
+            <label className="field span-2"><span>{tr('Remote host token')}</span><input className="mono" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={tr('printed by `dockera expose` or `dockera token --rotate` on the host')} /></label>
             <label className="check"><input type="checkbox" checked={f.tls} onChange={(e) => setF({ ...f, tls: e.target.checked })} /> TLS</label>
             <label className="field"><span>{tr('TLS sha256 fingerprint (pinning)')}</span><input className="mono" value={f.fingerprint} onChange={(e) => setF({ ...f, fingerprint: e.target.value, tls: f.tls || !!e.target.value })} /></label>
           </>
@@ -440,7 +440,7 @@ export function Login({ onDone }: { onDone: () => void }) {
           </>
         ) : (
           <>
-            <p className="muted">{tr('Emergency access token:')} <code>sudo dockera token</code> {tr('on the server.')}</p>
+            <p className="muted">{tr('Emergency access token:')} <code>sudo dockera token --rotate</code> {tr('on the server.')}</p>
             <input className="mono" type="password" autoFocus placeholder="token" value={token} onChange={(e) => setToken(e.target.value)} />
           </>
         )}

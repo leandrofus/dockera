@@ -484,7 +484,7 @@ function SignIn({ info, draft, setAuth }: { info: AccessInfo; draft: Draft; setA
         >
           <Switch checked={a.pam} disabled={!info.pam.built && !a.pam} onChange={(v) => setAuth({ pam: v })} />
         </Setting>
-        <Setting title={t('Emergency token')} desc={<>{t('A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Show it with')} <code>sudo dockera token</code></>}>
+        <Setting title={t('Emergency token')} desc={<>{t('A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Only its hash is stored: create a new one with')} <code>sudo dockera token --rotate</code></>}>
           <Switch checked={a.token_login} onChange={(v) => setAuth({ token_login: v })} />
         </Setting>
         {!a.pam && !a.token_login && <div className="alert alert-bad"><AlertTriangle size={14} /> {t('Keep at least one sign-in method enabled.')}</div>}

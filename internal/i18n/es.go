@@ -213,4 +213,11 @@ var es = map[string]string{
 	"Files written to %s": "Archivos escritos en %s",
 	"dockera no longer tracks the stack; its files in %s were kept": "dockera ya no sigue el stack; sus archivos en %s se conservaron",
 	"adopt the stack first": "adopta el stack primero",
+	"encryption key %s: %v": "clave de cifrado %s: %v",
+	"encryption key %s: must be 32 bytes (raw, hex or base64)": "clave de cifrado %s: debe tener 32 bytes (binario, hex o base64)",
+	"cannot decrypt the config with the key %s (wrong key?)": "no se puede descifrar la config con la clave %s (¿clave equivocada?)",
+	"encryption key not found (%s): the config has encrypted values; set DOCKERA_KEY_FILE or restore the key": "no se encuentra la clave de cifrado (%s): la config tiene valores cifrados; define DOCKERA_KEY_FILE o restaura la clave",
+	"the token is stored hashed and cannot be shown again: `dockera token --rotate` creates and prints a new one": "el token se guarda como hash y no puede mostrarse otra vez: `dockera token --rotate` crea e imprime uno nuevo",
+	"  (shown once: only its hash is stored)": "  (se muestra una vez: solo se guarda su hash)",
+	"(stored hashed; `dockera token --rotate` prints a new one)": "(guardado como hash; `dockera token --rotate` imprime uno nuevo)",
 }

@@ -13,6 +13,8 @@ User=dockera
 Group=dockera
 Environment=DOCKERA_HOME=/var/lib/dockera
 EnvironmentFile=-/etc/dockera/dockera.env
+# Encryption key for the secrets in config.json (root-only file).
+LoadCredential=dockera.key:/etc/dockera/secret.key
 ExecStart=/usr/bin/dockera serve $DOCKERA_OPTS
 Restart=on-failure
 RestartSec=3

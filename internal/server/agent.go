@@ -30,7 +30,7 @@ func (s *Server) checkAgentToken(token string) bool {
 		return false
 	}
 	cfg := s.Cfg.Snapshot()
-	if cfg.Token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(cfg.Token)) == 1 {
+	if cfg.CheckToken(token) {
 		return true
 	}
 	for _, ep := range cfg.Endpoints {
@@ -178,10 +178,10 @@ func (s *Server) handleAgentTunnel(w http.ResponseWriter, r *http.Request) {
 	if found {
 		if ep.Token != "" && subtle.ConstantTimeCompare([]byte(token), []byte(ep.Token)) == 1 {
 			authorized = true
-		} else if subtle.ConstantTimeCompare([]byte(token), []byte(s.Cfg.Token)) == 1 {
+		} else if s.Cfg.CheckToken(token) {
 			authorized = true
 		}
-	} else if subtle.ConstantTimeCompare([]byte(token), []byte(s.Cfg.Token)) == 1 {
+	} else if s.Cfg.CheckToken(token) {
 		// Auto-register endpoint if connecting with admin token
 		authorized = true
 		_ = s.Cfg.Update(func(cfg *config.Config) error {

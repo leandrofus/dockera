@@ -83,7 +83,7 @@ sudo systemctl restart dockera       # ahora escucha en 0.0.0.0:9900, con TLS
 
 Abre `https://<servidor>:9900` y entra con tu usuario y contraseña del sistema.
 
-El **token de emergencia** entra como administrador y autoriza la API. Se ve con `sudo dockera token`, y se desactiva con `sudo dockera auth set --token-login off`.
+El **token de emergencia** entra como administrador y autoriza la API. Solo se guarda su hash, así que se muestra una vez: `sudo dockera token --rotate` crea e imprime uno nuevo. Se desactiva con `sudo dockera auth set --token-login off`.
 
 ### 6. Más hosts Docker (opcional)
 

@@ -5,7 +5,6 @@
 package proxy
 
 import (
-	"crypto/subtle"
 	"log"
 	"net/http"
 	"net/http/httputil"
@@ -16,7 +15,8 @@ import (
 )
 
 type Options struct {
-	Token    func() string
+	// Check validates the bearer token; nil allows any request.
+	Check    func(token string) bool
 	ReadOnly bool
 	// NoExec blocks exec/attach, the endpoints that give a shell.
 	NoExec bool
@@ -37,7 +37,7 @@ func Handler(c *docker.Client, opt Options) http.Handler {
 		ErrorLog:      log.Default(),
 	}
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !checkToken(r, opt.Token()) {
+		if opt.Check != nil && !opt.Check(strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
 			w.Write([]byte(`{"message":"dockera: invalid or missing token (Authorization: Bearer <token>)"}`))
@@ -59,12 +59,4 @@ func deny(w http.ResponseWriter, msg string) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusForbidden)
 	w.Write([]byte(`{"message":"` + msg + `"}`))
-}
-
-func checkToken(r *http.Request, token string) bool {
-	if token == "" {
-		return true
-	}
-	got := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
-	return subtle.ConstantTimeCompare([]byte(got), []byte(token)) == 1
 }

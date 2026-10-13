@@ -8,7 +8,6 @@ import (
 	"crypto/subtle"
 	"dockera/internal/i18n"
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -46,9 +45,13 @@ func sessionFrom(ctx context.Context) *Session {
 	return s
 }
 
-func tokenHash(t string) string {
-	h := sha256.Sum256([]byte(t))
-	return hex.EncodeToString(h[:6])
+// sessionTokenHash ties token sessions to the current token (a prefix of
+// its stored hash): rotating the token revokes them.
+func sessionTokenHash(stored string) string {
+	if len(stored) < 12 {
+		return stored
+	}
+	return stored[:12]
 }
 
 func (s *Server) sign(sess Session) string {
@@ -114,7 +117,7 @@ func (s *Server) session(r *http.Request) (*Session, error) {
 		if !snap.Auth.TokenLogin {
 			return nil, i18n.Errorf("token access is disabled")
 		}
-		if subtle.ConstantTimeCompare([]byte(strings.TrimPrefix(h, "Bearer ")), []byte(snap.Token)) != 1 {
+		if !snap.CheckToken(strings.TrimPrefix(h, "Bearer ")) {
 			return nil, i18n.Errorf("invalid token")
 		}
 		return &Session{User: "token", Role: auth.RoleAdmin, Method: "token"}, nil
@@ -134,7 +137,7 @@ func (s *Server) session(r *http.Request) (*Session, error) {
 	}
 	switch sess.Method {
 	case "token":
-		if !snap.Auth.TokenLogin || sess.TokenHash != tokenHash(snap.Token) {
+		if !snap.Auth.TokenLogin || sess.TokenHash != sessionTokenHash(snap.TokenHash) {
 			return nil, i18n.Errorf("session revoked")
 		}
 	case "pam":
@@ -258,11 +261,11 @@ func (s *Server) login(w http.ResponseWriter, r *http.Request) {
 			fail(i18n.Errorf("token access is disabled"), http.StatusForbidden)
 			return
 		}
-		if subtle.ConstantTimeCompare([]byte(strings.TrimSpace(body.Token)), []byte(snap.Token)) != 1 {
+		if !snap.CheckToken(strings.TrimSpace(body.Token)) {
 			fail(i18n.Errorf("wrong token"), http.StatusUnauthorized)
 			return
 		}
-		sess = Session{User: "token", Role: auth.RoleAdmin, Method: "token", Exp: exp, TokenHash: tokenHash(snap.Token)}
+		sess = Session{User: "token", Role: auth.RoleAdmin, Method: "token", Exp: exp, TokenHash: sessionTokenHash(snap.TokenHash)}
 	case body.Username != "":
 		if !snap.Auth.PAM {
 			fail(i18n.Errorf("system-user access is disabled"), http.StatusForbidden)

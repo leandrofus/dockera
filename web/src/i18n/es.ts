@@ -1057,4 +1057,6 @@ export const es: Record<string, string> = {
   "Save registry": "Guardar registro",
   "Save settings": "Guardar configuración",
   "Kill": "Matar",
+  "A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Only its hash is stored: create a new one with": "Un único secreto que entra como administrador y autoriza la API (Authorization: Bearer). Solo se guarda su hash: crea uno nuevo con",
+  "printed by `dockera expose` or `dockera token --rotate` on the host": "lo imprime `dockera expose` o `dockera token --rotate` en el host",
 }

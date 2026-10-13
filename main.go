@@ -273,7 +273,7 @@ func cmdServe(args []string, openBrowser bool) error {
 		i18n.Printf("  Users      system (%s) · admin: %s · read-only: %s\n", i18n.Sprintf(auth.Mode()), strings.Join(snap.Auth.AdminGroups, ","), strings.Join(snap.Auth.ViewerGroups, ","))
 	}
 	if snap.Auth.TokenLogin {
-		fmt.Printf("  Token      %s\n", cfg.Token)
+		fmt.Printf("  Token      %s\n", tokenLine(cfg))
 	}
 	fmt.Printf("  Allowlist  loopback %s\n", strings.Join(acl.Entries(), " "))
 	if fp != "" {
@@ -298,7 +298,7 @@ func cmdServe(args []string, openBrowser bool) error {
 		if err != nil {
 			return err
 		}
-		ph := proxy.Handler(c, proxy.Options{Token: func() string { return cfg.Snapshot().Token }, ReadOnly: *exposeRO, NoExec: *exposeNoExec})
+		ph := proxy.Handler(c, proxy.Options{Check: cfg.CheckToken, ReadOnly: *exposeRO, NoExec: *exposeNoExec})
 		i18n.Printf("  Docker API exposed on %s (token required", *expose)
 		if efp != "" {
 			fmt.Printf(", TLS sha256 %s", efp)
@@ -427,16 +427,16 @@ func cmdExpose(args []string) error {
 	if err != nil {
 		return err
 	}
-	h := proxy.Handler(c, proxy.Options{Token: func() string { return cfg.Snapshot().Token }, ReadOnly: *ro, NoExec: *noExec})
+	h := proxy.Handler(c, proxy.Options{Check: cfg.CheckToken, ReadOnly: *ro, NoExec: *noExec})
 	i18n.Printf("\n  Docker API exposed on %s\n", *addr)
 	fmt.Printf("  Allowlist  loopback %s\n", strings.Join(acl.Entries(), " "))
-	fmt.Printf("  Token      %s\n", cfg.Token)
+	fmt.Printf("  Token      %s\n", tokenLine(cfg))
 	tlsFlag := ""
 	if fp != "" {
 		fmt.Printf("  TLS sha256 %s\n", fp)
 		tlsFlag = " --tls --fingerprint " + fp
 	}
-	i18n.Printf("\n  From another dockera:\n    dockera endpoint add %s tcp://%s --token %s%s\n\n", hostname(), displayAddr(*addr), cfg.Token, tlsFlag)
+	i18n.Printf("\n  From another dockera:\n    dockera endpoint add %s tcp://%s --token %s%s\n\n", hostname(), displayAddr(*addr), shownToken(cfg), tlsFlag)
 	errc := make(chan error, 1)
 	go func() { errc <- (&http.Server{Handler: h, ReadHeaderTimeout: 15 * time.Second}).Serve(ln) }()
 	return waitSignal(errc)
@@ -506,13 +506,35 @@ func cmdToken(args []string) error {
 		return err
 	}
 	if len(args) > 0 && args[0] == "--rotate" {
-		if err := cfg.Update(func(c *config.Config) error { c.Token = config.NewToken(); return nil }); err != nil {
+		t := config.NewToken()
+		if err := cfg.Update(func(c *config.Config) error { c.SetToken(t); return nil }); err != nil {
 			return err
 		}
 		i18n.Fprintf(os.Stderr, "token rotated; running services pick it up automatically\n")
+		fmt.Println(t)
+		return nil
 	}
-	fmt.Println(cfg.Snapshot().Token)
-	return nil
+	if t := cfg.FreshToken(); t != "" {
+		fmt.Println(t)
+		return nil
+	}
+	return i18n.Errorf("the token is stored hashed and cannot be shown again: `dockera token --rotate` creates and prints a new one")
+}
+
+// shownToken is the access token when this process created it, else a
+// placeholder (only its hash is stored).
+func shownToken(cfg *config.Config) string {
+	if t := cfg.FreshToken(); t != "" {
+		return t
+	}
+	return "<token>"
+}
+
+func tokenLine(cfg *config.Config) string {
+	if t := cfg.FreshToken(); t != "" {
+		return t + i18n.Sprintf("  (shown once: only its hash is stored)")
+	}
+	return i18n.Sprintf("(stored hashed; `dockera token --rotate` prints a new one)")
 }
 
 func cmdAllow(args []string) error {

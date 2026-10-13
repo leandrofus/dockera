@@ -328,13 +328,13 @@ func (s *Server) ReloadAccess() {
 
 func (s *Server) rotateToken(w http.ResponseWriter, r *http.Request) {
 	token := config.NewToken()
-	if err := s.Cfg.Update(func(cfg *config.Config) error { cfg.Token = token; return nil }); err != nil {
+	if err := s.Cfg.Update(func(cfg *config.Config) error { cfg.SetToken(token); return nil }); err != nil {
 		writeErr(w, err)
 		return
 	}
 	if sess := sessionFrom(r.Context()); sess != nil && sess.Method == "token" {
 		ns := *sess
-		ns.TokenHash = tokenHash(token)
+		ns.TokenHash = sessionTokenHash(config.HashToken(token))
 		s.setCookie(w, ns)
 	}
 	writeJSON(w, map[string]string{"token": token})

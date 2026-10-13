@@ -27,8 +27,7 @@ func newTestServer(t *testing.T) (*server.Server, *config.Config, func()) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.Token = "test-admin-token"
-	_ = cfg.Save()
+	_ = cfg.Update(func(c *config.Config) error { c.SetToken("test-admin-token"); return nil })
 
 	acl, err := access.New([]string{"127.0.0.1"})
 	if err != nil {
