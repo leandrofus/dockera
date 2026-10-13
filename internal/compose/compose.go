@@ -3,6 +3,7 @@
 package compose
 
 import (
+	"bytes"
 	"context"
 	"dockera/internal/i18n"
 	"encoding/base64"
@@ -13,6 +14,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -40,19 +42,116 @@ func (s *Store) dir(endpoint, name string) string {
 	return filepath.Join(s.Root, "stacks", endpoint, name)
 }
 
-// Managed lists stack names stored for an endpoint.
+// Managed lists stack names stored for an endpoint (in the store or
+// pointing to a directory).
 func (s *Store) Managed(endpoint string) []string {
 	entries, _ := os.ReadDir(filepath.Join(s.Root, "stacks", endpoint))
 	var out []string
 	for _, e := range entries {
-		if e.IsDir() {
-			if _, err := os.Stat(filepath.Join(s.dir(endpoint, e.Name()), FileName)); err == nil {
-				out = append(out, e.Name())
-			}
+		if e.IsDir() && s.Exists(endpoint, e.Name()) {
+			out = append(out, e.Name())
 		}
 	}
 	sort.Strings(out)
 	return out
+}
+
+// Location places a stack's compose file and .env in a directory of its
+// own (on the node, for remote endpoints) instead of dockera's store, so
+// relative volumes, env_file and build contexts resolve there.
+type Location struct {
+	Dir string `json:"dir"`
+	// File is the compose file name inside Dir (default compose.yaml).
+	File string `json:"file,omitempty"`
+	// EnvFile overrides Dir/.env (passed as --env-file).
+	EnvFile string `json:"env_file,omitempty"`
+}
+
+func (l *Location) ComposePath() string {
+	switch {
+	case l.File == "":
+		return path.Join(l.Dir, FileName)
+	case path.IsAbs(l.File):
+		return l.File
+	}
+	return path.Join(l.Dir, l.File)
+}
+
+func (l *Location) EnvPath() string {
+	if l.EnvFile != "" {
+		return l.EnvFile
+	}
+	return path.Join(l.Dir, ".env")
+}
+
+// Validate cleans the paths; they must be absolute on the node.
+func (l *Location) Validate() error {
+	l.Dir = strings.TrimRight(strings.TrimSpace(l.Dir), "/")
+	l.EnvFile = strings.TrimSpace(l.EnvFile)
+	if !path.IsAbs(l.Dir) || l.Dir == "/" {
+		return i18n.Errorf("the directory must be an absolute path, e.g. /opt/myapp")
+	}
+	l.Dir = path.Clean(l.Dir)
+	if l.EnvFile != "" {
+		if !path.IsAbs(l.EnvFile) {
+			l.EnvFile = path.Join(l.Dir, l.EnvFile)
+		}
+		l.EnvFile = path.Clean(l.EnvFile)
+		if l.EnvFile == path.Join(l.Dir, ".env") {
+			l.EnvFile = ""
+		}
+	}
+	return nil
+}
+
+const locationFile = "location.json"
+
+// Location returns where a stack lives, or nil when it is in the store.
+func (s *Store) Location(endpoint, name string) *Location {
+	data, err := os.ReadFile(filepath.Join(s.dir(endpoint, name), locationFile))
+	if err != nil {
+		return nil
+	}
+	var l Location
+	if json.Unmarshal(data, &l) != nil || l.Dir == "" {
+		return nil
+	}
+	return &l
+}
+
+// SetLocation points a stack at a directory, dropping any stored copy.
+func (s *Store) SetLocation(endpoint, name string, l Location) error {
+	if err := ValidName(name); err != nil {
+		return err
+	}
+	d := s.dir(endpoint, name)
+	if err := os.MkdirAll(d, 0o700); err != nil {
+		return err
+	}
+	data, _ := json.MarshalIndent(l, "", "  ")
+	if err := os.WriteFile(filepath.Join(d, locationFile), data, 0o600); err != nil {
+		return err
+	}
+	os.Remove(filepath.Join(d, FileName))
+	os.Remove(filepath.Join(d, ".env"))
+	return nil
+}
+
+// ComposeNames are the file names `docker compose` looks for, in order.
+var ComposeNames = []string{"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"}
+
+// FindCompose returns the compose file name present in dir, if any.
+func FindCompose(ctx context.Context, fsys FS, dir string) (string, error) {
+	for _, n := range ComposeNames {
+		ok, err := fsys.Exists(ctx, path.Join(dir, n))
+		if err != nil {
+			return "", err
+		}
+		if ok {
+			return n, nil
+		}
+	}
+	return "", nil
 }
 
 // File is one compose file of a project, in -f order.
@@ -67,7 +166,10 @@ type Files struct {
 	Env     string `json:"env"`
 	EnvPath string `json:"env_path"`
 	Dir     string `json:"dir"`
-	Managed bool   `json:"managed"`
+	// Managed: kept in dockera's store (not in place).
+	Managed bool `json:"managed"`
+	// Node: the files live on the remote node; compose runs there.
+	Node bool `json:"node"`
 }
 
 // Paths returns the compose file paths in order.
@@ -118,39 +220,49 @@ func (s *Store) Delete(endpoint, name string) error {
 	return os.RemoveAll(s.dir(endpoint, name))
 }
 
+// Exists: the stack is in the store or points to a directory.
 func (s *Store) Exists(endpoint, name string) bool {
+	return s.Stored(endpoint, name) || s.Location(endpoint, name) != nil
+}
+
+// Stored: the stack's compose file is kept in the store.
+func (s *Store) Stored(endpoint, name string) bool {
 	_, err := os.Stat(filepath.Join(s.dir(endpoint, name), FileName))
 	return err == nil
 }
 
-// ReadExternal loads every compose file of a project started outside
-// dockera (base + overrides), using the paths recorded in its container
-// labels. Only works when those paths are visible from this machine.
-func ReadExternal(workDir string, configFiles []string, envFile string) (*Files, error) {
+// ReadExternal loads every compose file of a project that lives in place
+// (base + overrides), e.g. using the paths recorded in its container labels.
+func ReadExternal(ctx context.Context, fsys FS, workDir string, configFiles []string, envFile string) (*Files, error) {
 	if len(configFiles) == 0 {
 		return nil, i18n.Errorf("the project does not record its compose files")
 	}
 	f := &Files{Dir: workDir}
-	for _, p := range ExistingFiles(configFiles) {
-		data, err := os.ReadFile(p)
+	_, f.Node = fsys.(*NodeFS)
+	paths, err := ExistingFiles(ctx, fsys, configFiles)
+	if err != nil {
+		return nil, err
+	}
+	for _, p := range paths {
+		data, err := fsys.ReadFile(ctx, p)
 		if err != nil {
-			return nil, i18n.Errorf("cannot read %s from this host: %v", p, err)
+			return nil, i18n.Errorf("cannot read %s: %v", p, err)
 		}
-		f.Files = append(f.Files, File{Path: p, Name: filepath.Base(p), Content: string(data)})
+		f.Files = append(f.Files, File{Path: p, Name: path.Base(p), Content: string(data)})
 	}
 	f.EnvPath = envFile
 	if f.EnvPath == "" {
-		f.EnvPath = filepath.Join(workDir, ".env")
+		f.EnvPath = path.Join(workDir, ".env")
 	}
-	env, _ := os.ReadFile(f.EnvPath)
+	env, _ := fsys.ReadFile(ctx, f.EnvPath)
 	f.Env = string(env)
 	return f, nil
 }
 
-// WriteExternal saves edited files of an external project in place. Only
-// paths that belong to the project can be written; untouched files are left
-// alone and existing permissions are kept.
-func WriteExternal(f *Files, contents map[string]string, env string) error {
+// WriteExternal saves edited files of a project in place. Only paths that
+// belong to the project can be written; untouched files are left alone and
+// existing permissions are kept.
+func WriteExternal(ctx context.Context, fsys FS, f *Files, contents map[string]string, env string) error {
 	for path, content := range contents {
 		idx := -1
 		for i, x := range f.Files {
@@ -164,22 +276,14 @@ func WriteExternal(f *Files, contents map[string]string, env string) error {
 		if f.Files[idx].Content == content {
 			continue
 		}
-		if err := writeKeepMode(path, content, 0o644); err != nil {
+		if err := fsys.WriteFile(ctx, path, []byte(content), 0o644); err != nil {
 			return err
 		}
 	}
 	if env != f.Env {
-		return writeKeepMode(f.EnvPath, env, 0o600)
+		return fsys.WriteFile(ctx, f.EnvPath, []byte(env), 0o600)
 	}
 	return nil
-}
-
-func writeKeepMode(path, content string, def os.FileMode) error {
-	mode := def
-	if st, err := os.Stat(path); err == nil {
-		mode = st.Mode().Perm()
-	}
-	return os.WriteFile(path, []byte(content), mode)
 }
 
 // Runner executes docker compose with the environment needed to reach an
@@ -187,6 +291,63 @@ func writeKeepMode(path, content string, def os.FileMode) error {
 type Runner struct {
 	Endpoint   config.Endpoint
 	Registries []config.Registry
+	// Client and Auth run compose on the node itself (files in place there).
+	Client *docker.Client
+	Auth   func(image string) string
+}
+
+// Exec runs compose for a project. With files on a remote node it runs
+// there; otherwise on this machine against the endpoint.
+func (r *Runner) Exec(ctx context.Context, stdout, stderr io.Writer, project string, f *Files, args ...string) error {
+	dir, files := os.TempDir(), []string(nil)
+	if f != nil {
+		dir, files = f.Dir, f.Paths()
+		// a custom --env-file must be passed on every run
+		if f.EnvPath != "" && f.EnvPath != path.Join(f.Dir, ".env") {
+			args = append([]string{"--env-file", f.EnvPath}, args...)
+		}
+	}
+	if f == nil || !f.Node {
+		cmd, cleanup, err := r.Command(ctx, project, dir, files, args...)
+		if err != nil {
+			return err
+		}
+		defer cleanup()
+		cmd.Stdout, cmd.Stderr = stdout, stderr
+		fmt.Fprintf(stderr, "$ docker %s\n", strings.Join(cmd.Args[1:], " "))
+		return cmd.Run()
+	}
+	if r.Client == nil {
+		return i18n.Errorf("cannot run compose on %s", r.Endpoint.Name)
+	}
+	full := []string{"docker", "compose", "-p", project}
+	for _, x := range files {
+		full = append(full, "-f", x)
+	}
+	full = append(full, "--project-directory", dir)
+	full = append(full, args...)
+	fmt.Fprintf(stderr, "$ [%s] %s\n", r.Endpoint.Name, strings.Join(full, " "))
+	var dirs []string
+	for _, x := range files {
+		dirs = append(dirs, path.Dir(x))
+	}
+	if f.EnvPath != "" {
+		dirs = append(dirs, path.Dir(f.EnvPath))
+	}
+	return r.runOnNode(ctx, stdout, stderr, dir, dirs, full)
+}
+
+// Output runs compose and returns its stdout.
+func (r *Runner) Output(ctx context.Context, project string, f *Files, args ...string) (string, error) {
+	var out, errb bytes.Buffer
+	if err := r.Exec(ctx, &out, &errb, project, f, args...); err != nil {
+		msg := strings.TrimSpace(errb.String())
+		if i := strings.LastIndex(msg, "\n"); i >= 0 {
+			msg = msg[i+1:]
+		}
+		return "", fmt.Errorf("%s (%w)", msg, err)
+	}
+	return out.String(), nil
 }
 
 // Command builds `docker compose -p project [-f files...] args...`.
@@ -210,19 +371,6 @@ func (r *Runner) Command(ctx context.Context, project, dir string, files []strin
 	}
 	cmd.Env = env
 	return cmd, cleanup, nil
-}
-
-// Run executes and streams combined output to w.
-func (r *Runner) Run(ctx context.Context, w io.Writer, project, dir string, files []string, args ...string) error {
-	cmd, cleanup, err := r.Command(ctx, project, dir, files, args...)
-	if err != nil {
-		return err
-	}
-	defer cleanup()
-	cmd.Stdout = w
-	cmd.Stderr = w
-	fmt.Fprintf(w, "$ docker %s\n", strings.Join(cmd.Args[1:], " "))
-	return cmd.Run()
 }
 
 func (r *Runner) env() ([]string, func(), error) {
@@ -256,12 +404,8 @@ func (r *Runner) env() ([]string, func(), error) {
 	if auths == nil {
 		auths = map[string]any{}
 	}
-	for _, reg := range r.Registries {
-		server := reg.Server
-		if server == "" || server == "docker.io" {
-			server = "https://index.docker.io/v1/"
-		}
-		auths[server] = map[string]string{"auth": base64.StdEncoding.EncodeToString([]byte(reg.Username + ":" + reg.Password))}
+	for k, v := range r.auths() {
+		auths[k] = v
 	}
 	cfg["auths"] = auths
 	if ep.Token != "" {
@@ -346,6 +490,19 @@ func (r *Runner) env() ([]string, func(), error) {
 	}, nil
 }
 
+// auths returns the dockera registries in docker config.json form.
+func (r *Runner) auths() map[string]any {
+	auths := map[string]any{}
+	for _, reg := range r.Registries {
+		server := reg.Server
+		if server == "" || server == "docker.io" {
+			server = "https://index.docker.io/v1/"
+		}
+		auths[server] = map[string]string{"auth": base64.StdEncoding.EncodeToString([]byte(reg.Username + ":" + reg.Password))}
+	}
+	return auths
+}
+
 // TLSEnv writes the endpoint's (pinned) certificate as ca.pem in dir and
 // returns the variables that make the docker CLI trust it. Verification is
 // strict when the certificate covers the host name used.
@@ -369,35 +526,39 @@ const BackupSuffix = ".dockera-bak"
 
 // ExistingFiles drops files that Merge folded into the base file (they are
 // still listed in container labels until the containers are recreated).
-func ExistingFiles(paths []string) []string {
+func ExistingFiles(ctx context.Context, fsys FS, paths []string) ([]string, error) {
 	var out []string
 	for _, p := range paths {
-		if _, err := os.Stat(p); err != nil {
-			if _, berr := os.Stat(p + BackupSuffix); berr == nil {
+		ok, err := fsys.Exists(ctx, p)
+		if err != nil {
+			return nil, err
+		}
+		if !ok {
+			if bak, _ := fsys.Exists(ctx, p+BackupSuffix); bak {
 				continue
 			}
 		}
 		out = append(out, p)
 	}
-	return out
+	return out, nil
 }
 
 // Merge writes merged into the project's first file and moves every other
 // file aside (<file>.dockera-bak), keeping a backup of the base too.
-func Merge(f *Files, merged string) ([]string, error) {
+func Merge(ctx context.Context, fsys FS, f *Files, merged string) ([]string, error) {
 	if len(f.Files) < 2 {
 		return nil, i18n.Errorf("the project already uses a single file")
 	}
 	base := f.Files[0]
-	if err := os.WriteFile(base.Path+BackupSuffix, []byte(base.Content), 0o644); err != nil {
+	if err := fsys.WriteFile(ctx, base.Path+BackupSuffix, []byte(base.Content), 0o644); err != nil {
 		return nil, err
 	}
 	var moved []string
 	for _, x := range f.Files[1:] {
-		if err := os.Rename(x.Path, x.Path+BackupSuffix); err != nil {
+		if err := fsys.Rename(ctx, x.Path, x.Path+BackupSuffix); err != nil {
 			return moved, err
 		}
 		moved = append(moved, x.Path+BackupSuffix)
 	}
-	return moved, writeKeepMode(base.Path, merged, 0o644)
+	return moved, fsys.WriteFile(ctx, base.Path, []byte(merged), 0o644)
 }

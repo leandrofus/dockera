@@ -398,6 +398,9 @@ input[type='checkbox'] { accent-color: var(--accent); width: 14px; height: 14px;
 .checks.col { flex-direction: column; gap: 10px; }
 .label { font-size: 12px; font-weight: 500; color: var(--text-2); margin-bottom: 5px; }
 .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+.placement { display: flex; flex-direction: column; gap: 8px; align-items: stretch; }
+.placement > .seg { align-self: flex-start; }
+.placement .help { margin: 0; }
 .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; }
 .span-2 { grid-column: span 2; }
 .grid-editor { display: grid; grid-template-columns: 2fr 1fr; gap: 12px; }

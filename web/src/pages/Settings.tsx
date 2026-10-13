@@ -24,6 +24,8 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
       tls: initial?.tls ?? false,
       fingerprint: initial?.fingerprint ?? '',
       ssh_key: initial?.ssh_key ?? '',
+      docker_socket: initial?.docker_socket ?? '',
+      compose_image: initial?.compose_image ?? '',
     }
   })
   const [busy, setBusy] = useState(false)
@@ -114,6 +116,16 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
               </details>
             </div>
           </div>
+        )}
+        {scheme !== 'unix' && (
+          <details className="span-2">
+            <summary className="small muted" style={{ cursor: 'pointer' }}>{tr('Stacks in directories on the node')}</summary>
+            <div className="grid-2" style={{ marginTop: 8 }}>
+              <label className="field"><span>{tr('Docker socket on the node')}</span><input className="mono" placeholder="/var/run/docker.sock" value={f.docker_socket} onChange={(e) => setF({ ...f, docker_socket: e.target.value })} /></label>
+              <label className="field"><span>{tr('Image with docker compose')}</span><input className="mono" placeholder="docker:cli" value={f.compose_image} onChange={(e) => setF({ ...f, compose_image: e.target.value })} /></label>
+            </div>
+            <p className="help">{tr('To read, edit and deploy stacks that live in a directory of the node (e.g. /opt/myapp), dockera starts short-lived containers from this image there, mounting the directory and the Docker socket. Change the socket for rootless Docker (/run/user/1000/docker.sock) and the image for air-gapped nodes (a mirror of docker:cli).')}</p>
+          </details>
         )}
       </div>
       <div className="help">

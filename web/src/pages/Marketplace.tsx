@@ -11,6 +11,7 @@ import { Avatar, CodeEditor, Empty, Spinner, Tag } from '../ui/common'
 import { useMenu } from '../ui/ContextMenu'
 import { Modal, openDialog, runJob, toast } from '../ui/overlays'
 import { ContainerFormDialog, emptySpec, splitArgs } from '../components/ContainerForm'
+import { PlacementFields, placementBody, usePlacement } from './Stacks'
 
 // Template notes are HTML from remote sources: keep a tiny safe subset.
 function safeHTML(html: string) {
@@ -101,6 +102,7 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
   const [err, setErr] = useState('')
   const [busy, setBusy] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
+  const [place, setPlace, remote] = usePlacement(ep)
 
   useEffect(() => {
     if (t.type === 1) return
@@ -119,7 +121,7 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
         if (res?.id) go(ep, 'containers', res.id)
       } else {
         const envText = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n')
-        await runJob(tr('Deploy {0}', t.title), 'POST', `/e/${enc(ep)}/stacks`, { name, compose, env: envText, deploy: true, pull: true })
+        await runJob(tr('Deploy {0}', t.title), 'POST', `/e/${enc(ep)}/stacks`, { name, compose, env: envText, deploy: true, pull: true, ...placementBody({ ...place, existing: false }, name) })
         onClose()
         invalidate('/stacks', '/containers')
         go(ep, 'stacks', name)
@@ -166,6 +168,12 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
         <span>{t.type === 1 ? tr('Container name') : tr('Stack name')}</span>
         <input value={name} onChange={(e) => setName(t.type === 1 ? e.target.value : slug(e.target.value))} />
       </label>
+      {t.type !== 1 && (
+        <div className="field">
+          <span>{tr('Location')}</span>
+          <PlacementFields name={name} value={place} onChange={setPlace} remote={remote} />
+        </div>
+      )}
       <EnvFields env={t.env || []} values={env} onChange={setEnv} />
       {t.type === 1 && (t.volumes || []).length > 0 && (
         <p className="help">

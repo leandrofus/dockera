@@ -9,9 +9,8 @@ import (
 	"net/http"
 	"net/url"
 	"os"
-	"os/exec"
 	"os/user"
-	"path/filepath"
+	"path"
 	"sort"
 	"strings"
 	"sync"
@@ -54,7 +53,14 @@ type stackInfo struct {
 	Writable bool `json:"writable"`
 	// Reason explains why the compose files can't be edited from here.
 	Reason string `json:"reason,omitempty"`
+	// Location: a dockera stack kept in its own directory (not the store).
+	Location *compose.Location `json:"location,omitempty"`
+	// Node: the files live on the remote node (compose runs there).
+	Node bool `json:"node,omitempty"`
 }
+
+// stored: the compose file is kept in dockera's store.
+func (st *stackInfo) stored() bool { return st.Managed && st.Location == nil }
 
 type rawContainer struct {
 	ID     string `json:"Id"`
@@ -70,7 +76,7 @@ func (s *Server) stacks(ctx context.Context, c *docker.Client, epName, lang stri
 	if err := c.Get(ctx, "/containers/json", url.Values{"all": {"1"}, "filters": {`{"label":["` + lblProject + `"]}`}}, &cts); err != nil {
 		return nil, err
 	}
-	local := strings.HasPrefix(c.Endpoint.URL, "unix://")
+	local := c.Endpoint.Local()
 	out := map[string]*stackInfo{}
 	for _, ct := range cts {
 		p := ct.Labels[lblProject]
@@ -93,6 +99,11 @@ func (s *Server) stacks(ctx context.Context, c *docker.Client, epName, lang stri
 			out[n] = &stackInfo{Name: n}
 		}
 		out[n].Managed = true
+		if loc := s.Stacks.Location(epName, n); loc != nil {
+			st := out[n]
+			st.Location = loc
+			st.WorkingDir, st.ConfigFiles, st.EnvFile = loc.Dir, []string{loc.ComposePath()}, loc.EnvFile
+		}
 	}
 	for _, st := range out {
 		svc := map[string]bool{}
@@ -118,10 +129,12 @@ func (s *Server) stacks(ctx context.Context, c *docker.Client, epName, lang stri
 		default:
 			st.Status = "partial"
 		}
-		st.Editable, st.Reason = editable(st, local, lang)
+		st.Editable, st.Reason = editable(ctx, st, local, lang)
 		st.Writable = st.Editable
-		if st.Editable && !st.Managed {
-			for _, f := range compose.ExistingFiles(st.ConfigFiles) {
+		st.Node = !local && !st.stored()
+		if st.Editable && local && !st.stored() {
+			files, _ := compose.ExistingFiles(ctx, compose.LocalFS{}, st.ConfigFiles)
+			for _, f := range files {
 				if !compose.Writable(f) {
 					st.Writable, st.Reason = false, i18n.T(lang, "no write permission on %s for user %s (read-only)", f, runUser())
 					break
@@ -138,16 +151,17 @@ func (s *Server) stacks(ctx context.Context, c *docker.Client, epName, lang stri
 	return out, nil
 }
 
-func editable(st *stackInfo, local bool, lang string) (bool, string) {
+func editable(ctx context.Context, st *stackInfo, local bool, lang string) (bool, string) {
 	switch {
-	case st.Managed:
+	case st.stored():
 		return true, ""
-	case !local:
-		return false, i18n.T(lang, "the project was created directly on the remote host; its files are not reachable from dockera (you can adopt it by pasting the compose)")
 	case len(st.ConfigFiles) == 0:
 		return false, i18n.T(lang, "the containers do not record their compose files")
+	case !local:
+		return true, "" // read on the node when opened
 	}
-	for _, f := range compose.ExistingFiles(st.ConfigFiles) {
+	files, _ := compose.ExistingFiles(ctx, compose.LocalFS{}, st.ConfigFiles)
+	for _, f := range files {
 		if _, err := os.Stat(f); err != nil {
 			if os.IsPermission(err) {
 				return false, i18n.T(lang, "user %s cannot access %s (check the directory permissions)", runUser(), f)
@@ -203,25 +217,34 @@ func (s *Server) stack(r *http.Request) (*docker.Client, *stackInfo, error) {
 	return c, st, nil
 }
 
-// files returns the compose files for a stack, if reachable from here.
-func (s *Server) files(ep string, st *stackInfo) (*compose.Files, error) {
-	if st.Managed {
-		return s.Stacks.Read(ep, st.Name)
+// fsFor reaches the files of an endpoint: this machine's for the local
+// socket, the node's (through a helper container) otherwise.
+func (s *Server) fsFor(c *docker.Client) compose.FS {
+	if c.Endpoint.Local() {
+		return compose.LocalFS{}
+	}
+	return compose.ForNode(c, s.registryAuth)
+}
+
+// files returns the compose files for a stack, if reachable.
+func (s *Server) files(ctx context.Context, c *docker.Client, st *stackInfo) (*compose.Files, error) {
+	if st.stored() {
+		return s.Stacks.Read(c.Endpoint.Name, st.Name)
 	}
 	if !st.Editable {
 		return nil, errors.New(st.Reason)
 	}
-	return compose.ReadExternal(st.WorkingDir, st.ConfigFiles, st.EnvFile)
+	return compose.ReadExternal(ctx, s.fsFor(c), st.WorkingDir, st.ConfigFiles, st.EnvFile)
 }
 
 func (s *Server) getStack(w http.ResponseWriter, r *http.Request) {
-	_, st, err := s.stack(r)
+	c, st, err := s.stack(r)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	resp := map[string]any{"stack": st}
-	if f, err := s.files(r.PathValue("ep"), st); err == nil {
+	if f, err := s.files(r.Context(), c, st); err == nil {
 		resp["files"] = f
 	} else {
 		resp["files_error"] = i18n.Render(err, reqLang(r))
@@ -234,7 +257,11 @@ func (s *Server) runner(ep string) (*compose.Runner, error) {
 	if !ok {
 		return nil, herr(http.StatusNotFound, "unknown endpoint")
 	}
-	return &compose.Runner{Endpoint: e, Registries: s.Cfg.Snapshot().Registry}, nil
+	c, err := s.Client(ep)
+	if err != nil {
+		return nil, err
+	}
+	return &compose.Runner{Endpoint: e, Registries: s.Cfg.Snapshot().Registry, Client: c, Auth: s.registryAuth}, nil
 }
 
 // compose runs docker compose for a stack streaming its output.
@@ -245,17 +272,9 @@ func (s *Server) compose(ctx context.Context, st *stream, ep, project string, f 
 	}
 	lw := &lineWriter{s: st}
 	defer lw.Flush()
-	dir, files := os.TempDir(), []string(nil)
-	if f != nil {
-		dir, files = f.Dir, f.Paths()
-		// a custom --env-file used at creation must be passed again
-		if !f.Managed && f.EnvPath != "" && f.EnvPath != filepath.Join(f.Dir, ".env") {
-			args = append([]string{"--env-file", f.EnvPath}, args...)
-		}
-	}
-	if err := rn.Run(ctx, lw, project, dir, files, args...); err != nil {
+	if err := rn.Exec(ctx, lw, lw, project, f, args...); err != nil {
 		lw.Flush()
-		if lw.last != "" && !strings.HasPrefix(lw.last, "$ docker") {
+		if lw.last != "" && !strings.HasPrefix(lw.last, "$ ") {
 			return fmt.Errorf("%s (%w)", lw.last, err)
 		}
 		return err
@@ -271,6 +290,10 @@ type stackReq struct {
 	Env    string            `json:"env"`
 	Deploy bool              `json:"deploy"`
 	Pull   bool              `json:"pull"`
+	// Location keeps the stack in a directory (on the node) instead of the
+	// store; Existing uses the compose file already there.
+	Location *compose.Location `json:"location"`
+	Existing bool              `json:"existing"`
 }
 
 func (s *Server) createStack(w http.ResponseWriter, r *http.Request) {
@@ -289,19 +312,32 @@ func (s *Server) createStack(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, herr(http.StatusConflict, "a stack with that name already exists"))
 		return
 	}
-	if _, err := s.Stacks.Write(ep, req.Name, req.Compose, req.Env); err != nil {
-		writeErr(w, err)
-		return
+	if req.Location != nil && strings.TrimSpace(req.Location.Dir) == "" {
+		req.Location = nil
+	}
+	if req.Location == nil {
+		if _, err := s.Stacks.Write(ep, req.Name, req.Compose, req.Env); err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	st := newStream(w)
 	ctx := context.WithoutCancel(r.Context())
 	st.Close(func() error {
-		f, err := s.Stacks.Read(ep, req.Name)
+		var f *compose.Files
+		var undo func()
+		var err error
+		if req.Location == nil {
+			f, err = s.Stacks.Read(ep, req.Name)
+			undo = func() { s.Stacks.Delete(ep, req.Name) }
+		} else {
+			f, undo, err = s.createInPlace(ctx, st, ep, req)
+		}
 		if err != nil {
 			return err
 		}
 		if err := s.compose(ctx, st, ep, req.Name, f, "config", "--quiet"); err != nil {
-			s.Stacks.Delete(ep, req.Name)
+			undo()
 			return i18n.Errorf("invalid compose, not saved: %v", err)
 		}
 		st.Log("Stack saved")
@@ -316,6 +352,64 @@ func (s *Server) createStack(w http.ResponseWriter, r *http.Request) {
 	}())
 }
 
+// createInPlace writes a new stack into its own directory (or registers
+// the compose file already there) and returns how to undo it.
+func (s *Server) createInPlace(ctx context.Context, st *stream, ep string, req stackReq) (*compose.Files, func(), error) {
+	loc := *req.Location
+	if err := loc.Validate(); err != nil {
+		return nil, nil, err
+	}
+	c, err := s.Client(ep)
+	if err != nil {
+		return nil, nil, err
+	}
+	fsys := s.fsFor(c)
+	found, err := compose.FindCompose(ctx, fsys, loc.Dir)
+	if err != nil {
+		return nil, nil, err
+	}
+	var created []string
+	switch {
+	case req.Existing && found == "":
+		return nil, nil, i18n.Errorf("there is no compose file in %s", loc.Dir)
+	case req.Existing:
+		loc.File = found
+	case found != "":
+		return nil, nil, i18n.Errorf("%s already has a compose file (%s): use the existing files or pick another directory", loc.Dir, found)
+	default:
+		if err := fsys.WriteFile(ctx, loc.ComposePath(), []byte(req.Compose), 0o644); err != nil {
+			return nil, nil, err
+		}
+		created = append(created, loc.ComposePath())
+		if strings.TrimSpace(req.Env) != "" {
+			had, _ := fsys.Exists(ctx, loc.EnvPath())
+			if err := fsys.WriteFile(ctx, loc.EnvPath(), []byte(req.Env), 0o600); err != nil {
+				fsys.Remove(ctx, loc.ComposePath())
+				return nil, nil, err
+			}
+			if !had {
+				created = append(created, loc.EnvPath())
+			}
+		}
+		st.Log("Files written to %s", loc.Dir)
+	}
+	if err := s.Stacks.SetLocation(ep, req.Name, loc); err != nil {
+		return nil, nil, err
+	}
+	undo := func() {
+		for _, p := range created {
+			fsys.Remove(ctx, p)
+		}
+		s.Stacks.Delete(ep, req.Name)
+	}
+	f, err := compose.ReadExternal(ctx, fsys, loc.Dir, []string{loc.ComposePath()}, loc.EnvFile)
+	if err != nil {
+		undo()
+		return nil, nil, err
+	}
+	return f, undo, nil
+}
+
 func (s *Server) updateStack(w http.ResponseWriter, r *http.Request) {
 	ep := r.PathValue("ep")
 	name := r.PathValue("name")
@@ -326,7 +420,7 @@ func (s *Server) updateStack(w http.ResponseWriter, r *http.Request) {
 	}
 	var f *compose.Files
 	var restore func()
-	if s.Stacks.Exists(ep, name) {
+	if s.Stacks.Stored(ep, name) {
 		prev, _ := s.Stacks.Read(ep, name)
 		content := req.Compose
 		if content == "" {
@@ -341,12 +435,12 @@ func (s *Server) updateStack(w http.ResponseWriter, r *http.Request) {
 		f, _ = s.Stacks.Read(ep, name)
 		restore = func() { s.Stacks.Write(ep, name, prev.Files[0].Content, prev.Env) }
 	} else {
-		_, info, err := s.stack(r)
+		c, info, err := s.stack(r)
 		if err != nil {
 			writeErr(w, err)
 			return
 		}
-		prev, err := s.files(ep, info)
+		prev, err := s.files(r.Context(), c, info)
 		if err != nil {
 			writeErr(w, err)
 			return
@@ -355,16 +449,21 @@ func (s *Server) updateStack(w http.ResponseWriter, r *http.Request) {
 			writeErr(w, &httpError{http.StatusForbidden, errors.New(info.Reason)})
 			return
 		}
-		if err := compose.WriteExternal(prev, req.Files, req.Env); err != nil {
+		fsys := s.fsFor(c)
+		if err := compose.WriteExternal(r.Context(), fsys, prev, req.Files, req.Env); err != nil {
 			writeErr(w, err)
 			return
 		}
-		f, _ = compose.ReadExternal(info.WorkingDir, info.ConfigFiles, info.EnvFile)
+		f, err = compose.ReadExternal(r.Context(), fsys, info.WorkingDir, info.ConfigFiles, info.EnvFile)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
 		old := map[string]string{}
 		for _, x := range prev.Files {
 			old[x.Path] = x.Content
 		}
-		restore = func() { compose.WriteExternal(f, old, prev.Env) }
+		restore = func() { compose.WriteExternal(context.Background(), fsys, f, old, prev.Env) }
 	}
 	st := newStream(w)
 	ctx := context.WithoutCancel(r.Context())
@@ -387,12 +486,12 @@ func (s *Server) updateStack(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) stackAction(w http.ResponseWriter, r *http.Request) {
 	ep := r.PathValue("ep")
-	_, info, err := s.stack(r)
+	c, info, err := s.stack(r)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	f, ferr := s.files(ep, info)
+	f, ferr := s.files(r.Context(), c, info)
 	var args []string
 	needsFiles := false
 	switch r.PathValue("action") {
@@ -424,7 +523,7 @@ func (s *Server) stackAction(w http.ResponseWriter, r *http.Request) {
 func (s *Server) deleteStack(w http.ResponseWriter, r *http.Request) {
 	ep := r.PathValue("ep")
 	name := r.PathValue("name")
-	_, info, err := s.stack(r)
+	c, info, err := s.stack(r)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -437,7 +536,7 @@ func (s *Server) deleteStack(w http.ResponseWriter, r *http.Request) {
 			if r.URL.Query().Get("volumes") == "1" {
 				args = append(args, "--volumes")
 			}
-			f, ferr := s.files(ep, info)
+			f, ferr := s.files(ctx, c, info)
 			if ferr != nil {
 				f = nil
 			}
@@ -449,7 +548,11 @@ func (s *Server) deleteStack(w http.ResponseWriter, r *http.Request) {
 			if err := s.Stacks.Delete(ep, name); err != nil {
 				return err
 			}
-			st.Log("Stack files removed")
+			if info.Location != nil {
+				st.Log("dockera no longer tracks the stack; its files in %s were kept", info.Location.Dir)
+			} else {
+				st.Log("Stack files removed")
+			}
 		}
 		return nil
 	}())
@@ -459,7 +562,7 @@ func (s *Server) deleteStack(w http.ResponseWriter, r *http.Request) {
 // can be managed (and edited) from here.
 func (s *Server) adoptStack(w http.ResponseWriter, r *http.Request) {
 	ep := r.PathValue("ep")
-	_, info, err := s.stack(r)
+	c, info, err := s.stack(r)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -477,9 +580,25 @@ func (s *Server) adoptStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if body.Compose == "" {
-		f, err := s.files(ep, info)
+		f, err := s.files(r.Context(), c, info)
 		if err != nil {
 			writeErr(w, badRequest("%v — paste the compose content to adopt it", err))
+			return
+		}
+		if len(f.Files) == 1 { // track it in place: paths keep resolving where they did
+			loc := compose.Location{Dir: f.Dir, File: f.Files[0].Path, EnvFile: info.EnvFile}
+			if path.Dir(loc.File) == loc.Dir {
+				loc.File = path.Base(loc.File)
+			}
+			if err := loc.Validate(); err != nil {
+				writeErr(w, badRequest(err.Error()))
+				return
+			}
+			if err := s.Stacks.SetLocation(ep, info.Name, loc); err != nil {
+				writeErr(w, err)
+				return
+			}
+			writeJSON(w, map[string]bool{"ok": true})
 			return
 		}
 		body.Env = f.Env
@@ -545,28 +664,20 @@ func (s *Server) mergedConfig(ctx context.Context, ep, project string, f *compos
 	if err != nil {
 		return "", err
 	}
-	cmd, cleanup, err := rn.Command(ctx, project, f.Dir, f.Paths(), "config", "--no-interpolate")
+	out, err := rn.Output(ctx, project, f, "config", "--no-interpolate")
 	if err != nil {
-		return "", err
+		return "", fmt.Errorf("compose config: %w", err)
 	}
-	defer cleanup()
-	out, err := cmd.Output()
-	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
-			return "", fmt.Errorf("compose config: %s", strings.TrimSpace(string(ee.Stderr)))
-		}
-		return "", err
-	}
-	return string(out), nil
+	return out, nil
 }
 
 func (s *Server) stackMerged(w http.ResponseWriter, r *http.Request) {
-	_, info, err := s.stack(r)
+	c, info, err := s.stack(r)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	f, err := s.files(r.PathValue("ep"), info)
+	f, err := s.files(r.Context(), c, info)
 	if err != nil {
 		writeErr(w, badRequest(err.Error()))
 		return
@@ -582,7 +693,7 @@ func (s *Server) stackMerged(w http.ResponseWriter, r *http.Request) {
 // stackMerge folds base + override files into the base file in place.
 func (s *Server) stackMerge(w http.ResponseWriter, r *http.Request) {
 	ep := r.PathValue("ep")
-	_, info, err := s.stack(r)
+	c, info, err := s.stack(r)
 	if err != nil {
 		writeErr(w, err)
 		return
@@ -595,7 +706,7 @@ func (s *Server) stackMerge(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, &httpError{http.StatusForbidden, errors.New(info.Reason)})
 		return
 	}
-	f, err := s.files(ep, info)
+	f, err := s.files(r.Context(), c, info)
 	if err != nil {
 		writeErr(w, badRequest(err.Error()))
 		return
@@ -605,10 +716,73 @@ func (s *Server) stackMerge(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, badRequest(err.Error()))
 		return
 	}
-	moved, err := compose.Merge(f, merged)
+	moved, err := compose.Merge(r.Context(), s.fsFor(c), f, merged)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	writeJSON(w, map[string]any{"ok": true, "file": f.Files[0].Path, "backups": append([]string{f.Files[0].Path + compose.BackupSuffix}, moved...)})
+}
+
+// stackLocation moves a stack kept in the store to its own directory, or
+// points a stack at another directory that already holds its compose file.
+func (s *Server) stackLocation(w http.ResponseWriter, r *http.Request) {
+	ep, name := r.PathValue("ep"), r.PathValue("name")
+	var loc compose.Location
+	if err := readJSON(r, &loc); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := loc.Validate(); err != nil {
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
+	c, info, err := s.stack(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if !info.Managed {
+		writeErr(w, badRequest("adopt the stack first"))
+		return
+	}
+	ctx := r.Context()
+	fsys := s.fsFor(c)
+	found, err := compose.FindCompose(ctx, fsys, loc.Dir)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if info.stored() {
+		if found != "" {
+			writeErr(w, herr(http.StatusConflict, "%s already has a compose file (%s): use the existing files or pick another directory", loc.Dir, found))
+			return
+		}
+		f, err := s.Stacks.Read(ep, name)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if err := fsys.WriteFile(ctx, loc.ComposePath(), []byte(f.Files[0].Content), 0o644); err != nil {
+			writeErr(w, err)
+			return
+		}
+		if strings.TrimSpace(f.Env) != "" {
+			if err := fsys.WriteFile(ctx, loc.EnvPath(), []byte(f.Env), 0o600); err != nil {
+				writeErr(w, err)
+				return
+			}
+		}
+	} else {
+		if found == "" {
+			writeErr(w, badRequest("there is no compose file in %s", loc.Dir))
+			return
+		}
+		loc.File = found
+	}
+	if err := s.Stacks.SetLocation(ep, name, loc); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "location": loc})
 }

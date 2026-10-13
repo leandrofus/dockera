@@ -1,8 +1,8 @@
 import { t as tr, tc } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
-import { Layers, Plus, Search, ChevronRight, Rocket, Save, Undo2, FolderOpen, Box, Play, Square, RotateCw, RefreshCw, LayoutGrid, LayoutList, Combine } from 'lucide-react'
+import { Layers, Plus, Search, ChevronRight, Rocket, Save, Undo2, FolderOpen, Box, Play, Square, RotateCw, RefreshCw, LayoutGrid, LayoutList, Combine, FolderInput } from 'lucide-react'
 import { api, enc } from '../lib/api'
-import type { Container, Stack, StackFiles } from '../lib/types'
+import type { Container, Endpoint, Stack, StackFiles, StackLocation } from '../lib/types'
 import { useResource, invalidate } from '../lib/store'
 import { usePref } from '../lib/prefs'
 import { copy, humanStatus } from '../lib/format'
@@ -26,6 +26,75 @@ const SAMPLE = `services:
       - "8080:80"
 `
 
+/** Whether an endpoint is a remote node (its files are not on this machine). */
+export function useRemote(ep: string) {
+  const { data } = useResource<Endpoint[]>('/endpoints')
+  const e = data?.find((x) => x.name === ep)
+  return !!e && !e.url.startsWith('unix://')
+}
+
+export interface Placement {
+  mode: 'store' | 'dir'
+  dir: string
+  env_file: string
+  existing: boolean
+}
+
+/** Request fields for where a new stack lives. */
+export function placementBody(p: Placement, name: string) {
+  if (p.mode === 'store') return {}
+  return { location: { dir: p.dir || `/opt/${name}`, env_file: p.env_file }, existing: p.existing }
+}
+
+/** Store vs. a directory of its own (on the node for remote hosts). */
+export function usePlacement(ep: string) {
+  const remote = useRemote(ep)
+  const [p, setP] = useState<Placement | null>(null)
+  // remote hosts default to a directory on the node: relative paths in the
+  // compose then resolve there and not in dockera's store
+  return [p ?? { mode: remote ? 'dir' : 'store', dir: '', env_file: '', existing: false }, setP, remote] as const
+}
+
+export function PlacementFields({ name, value: p, onChange, remote, allowExisting }: { name: string; value: Placement; onChange: (p: Placement) => void; remote: boolean; allowExisting?: boolean }) {
+  const dir = p.dir || `/opt/${name || tr('<name>')}`
+  return (
+    <div className="placement">
+      <div className="seg seg-text">
+        <button className={p.mode === 'store' ? 'on' : ''} onClick={() => onChange({ ...p, mode: 'store', existing: false })}>{tr('dockera store')}</button>
+        <button className={p.mode === 'dir' ? 'on' : ''} onClick={() => onChange({ ...p, mode: 'dir' })}>{remote ? tr('Directory on the node') : tr('Directory on this host')}</button>
+      </div>
+      {p.mode === 'store' ? (
+        <p className="help">
+          {tr('The compose and .env are kept by dockera. Relative paths (./data, env_file) resolve from its data directory')}
+          {remote && <strong> {tr('on this machine, not on the node')}</strong>}.
+        </p>
+      ) : (
+        <>
+          <div className="grid-2">
+            <label className="field">
+              <span>{tr('Project directory')}</span>
+              <input className="mono" value={p.dir} placeholder={dir} onChange={(e) => onChange({ ...p, dir: e.target.value })} />
+            </label>
+            <label className="field">
+              <span>{tr('.env file (optional)')}</span>
+              <input className="mono" value={p.env_file} placeholder={`${dir.replace(/\/$/, '')}/.env`} onChange={(e) => onChange({ ...p, env_file: e.target.value })} />
+            </label>
+          </div>
+          {allowExisting && (
+            <label className="check">
+              <input type="checkbox" checked={p.existing} onChange={(e) => onChange({ ...p, existing: e.target.checked })} /> {tr('Use the compose file already in that directory')}
+            </label>
+          )}
+          <p className="help">
+            {tr('compose.yaml and .env are written there and compose runs with that project directory: volumes like ./data, env_file and build contexts resolve inside it.')}
+            {remote && ' ' + tr('On remote hosts compose runs on the node itself (in a temporary docker:cli container).')}
+          </p>
+        </>
+      )}
+    </div>
+  )
+}
+
 export function NewStackDialog({ ep, onClose, initial }: { ep: string; onClose: () => void; initial?: { name?: string; compose?: string; env?: string; note?: string } }) {
   const [name, setName] = useState(initial?.name ?? '')
   const [compose, setCompose] = useState(initial?.compose ?? SAMPLE)
@@ -33,10 +102,12 @@ export function NewStackDialog({ ep, onClose, initial }: { ep: string; onClose: 
   const [deploy, setDeploy] = useState(true)
   const [mode, setMode] = usePref<'yaml' | 'visual'>('compose.mode', 'visual')
   const [busy, setBusy] = useState(false)
+  const [place, setPlace, remote] = usePlacement(ep)
+  const existing = place.mode === 'dir' && place.existing
   const submit = async () => {
     setBusy(true)
     try {
-      await runJob(tr('Create stack {0}', name), 'POST', `/e/${enc(ep)}/stacks`, { name, compose, env, deploy })
+      await runJob(tr('Create stack {0}', name), 'POST', `/e/${enc(ep)}/stacks`, { name, compose: existing ? '' : compose, env: existing ? '' : env, deploy, ...placementBody(place, name) })
       onClose()
       invalidate('/stacks', '/containers')
       go(ep, 'stacks', name)
@@ -59,7 +130,7 @@ export function NewStackDialog({ ep, onClose, initial }: { ep: string; onClose: 
           </label>
           <span className="grow" />
           <button className="btn" onClick={onClose}>{tr('Cancel')}</button>
-          <button className="btn btn-primary" disabled={busy || !name || !compose.trim()} onClick={submit}>
+          <button className="btn btn-primary" disabled={busy || !name || (!existing && !compose.trim())} onClick={submit}>
             <Rocket size={14} /> {tr('Create stack')}
           </button>
         </>
@@ -70,7 +141,11 @@ export function NewStackDialog({ ep, onClose, initial }: { ep: string; onClose: 
         <span>{tr('Project name')}</span>
         <input value={name} placeholder="mi-stack" onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-'))} autoFocus />
       </label>
-      <div className={mode === 'visual' ? 'stack-new-visual' : 'grid-editor'}>
+      <div className="field">
+        <span>{tr('Location')}</span>
+        <PlacementFields name={name} value={place} onChange={setPlace} remote={remote} allowExisting />
+      </div>
+      {!existing && <div className={mode === 'visual' ? 'stack-new-visual' : 'grid-editor'}>
         <div>
           <div className="label row gap">
             compose.yaml <span className="grow" />
@@ -85,7 +160,59 @@ export function NewStackDialog({ ep, onClose, initial }: { ep: string; onClose: 
           <div className="label">.env</div>
           <CodeEditor value={env} onChange={setEnv} minRows={22} placeholder={tr('VARIABLE=value')} />
         </div>
+      </div>}
+    </Modal>
+  )
+}
+
+/** Moves a store stack to its own directory or repoints a located one. */
+export function LocationDialog({ ep, stack, onClose }: { ep: string; stack: Stack; onClose: () => void }) {
+  const remote = useRemote(ep)
+  const [loc, setLoc] = useState<StackLocation>({ dir: stack.location?.dir ?? '', env_file: stack.location?.env_file ?? '' })
+  const [busy, setBusy] = useState(false)
+  const stored = !stack.location
+  const save = async () => {
+    setBusy(true)
+    try {
+      await api.put(`/e/${enc(ep)}/stacks/${enc(stack.name)}/location`, { dir: loc.dir || `/opt/${stack.name}`, env_file: loc.env_file })
+      toast.ok(tr('Location of {0} updated', stack.name))
+      invalidate('/stacks')
+      onClose()
+    } catch (e) {
+      toast.err(e)
+    } finally {
+      setBusy(false)
+    }
+  }
+  const dir = loc.dir || `/opt/${stack.name}`
+  return (
+    <Modal
+      title={tr('Location of {0}', stack.name)}
+      icon={<FolderInput size={18} />}
+      onClose={onClose}
+      footer={
+        <>
+          <button className="btn" onClick={onClose}>{tr('Cancel')}</button>
+          <button className="btn btn-primary" disabled={busy} onClick={save}>{stored ? tr('Move files') : tr('Save')}</button>
+        </>
+      }
+    >
+      <div className="grid-2">
+        <label className="field">
+          <span>{remote ? tr('Directory on the node') : tr('Project directory')}</span>
+          <input className="mono" value={loc.dir} placeholder={dir} onChange={(e) => setLoc({ ...loc, dir: e.target.value })} autoFocus />
+        </label>
+        <label className="field">
+          <span>{tr('.env file (optional)')}</span>
+          <input className="mono" value={loc.env_file} placeholder={`${dir.replace(/\/$/, '')}/.env`} onChange={(e) => setLoc({ ...loc, env_file: e.target.value })} />
+        </label>
       </div>
+      <p className="help">
+        {stored
+          ? tr('compose.yaml and .env are copied there and removed from the dockera store. The directory must not contain a compose file yet.')
+          : tr('The directory must already contain the compose file; nothing is copied.')}
+      </p>
+      {stack.total > 0 && <div className="alert alert-warn">{tr('Relative bind mounts (./data) will point to the new directory on the next deploy: move their data there first.')}</div>}
     </Modal>
   )
 }
@@ -157,7 +284,7 @@ export function Stacks({ ep }: { ep: string }) {
                   <Avatar name={s.name} size={34} square />
                   <div className="grow">
                     <strong>{s.name}</strong>
-                    <div className="muted small ellipsis" title={s.working_dir}>{s.managed ? tr('managed by dockera') : s.working_dir || tr('external')}</div>
+                    <div className="muted small ellipsis" title={s.working_dir}>{s.managed && !s.location ? tr('managed by dockera') : s.working_dir || tr('external')}</div>
                   </div>
                   <MenuButton items={() => stackActions(ep, s)} />
                 </div>
@@ -188,7 +315,7 @@ export function Stacks({ ep }: { ep: string }) {
               { key: 'status', label: tr('Status'), width: 150, sort: (s) => s.status, render: (s) => <Pill state={s.status} /> },
               { key: 'n', label: tr('Containers'), width: 120, sort: (s) => s.total, render: (s) => `${s.running}/${s.total}` },
               { key: 'svc', label: tr('Services'), render: (s) => <span className="tags">{s.services.map((x) => <Tag key={x}>{x}</Tag>)}</span> },
-              { key: 'dir', label: tr('Origin'), render: (s) => <span className="muted small ellipsis">{s.managed ? 'dockera' : s.working_dir}</span> },
+              { key: 'dir', label: tr('Origin'), render: (s) => <span className="muted small ellipsis">{s.managed && !s.location ? 'dockera' : s.working_dir}</span> },
               { key: 'm', label: '', width: 36, render: (s) => <MenuButton items={() => stackActions(ep, s)} /> },
             ]}
           />
@@ -245,7 +372,9 @@ export function StackRecord({ ep, name, tab = 'services' }: { ep: string; name: 
               items={[
                 [tr('Project'), s.name],
                 [tr('Origin'), s.managed ? tr('Created with dockera') : tr('External (docker compose)')],
+                s.managed && [tr('Location'), s.location ? (s.node ? tr('Directory on the node') : tr('Own directory')) : tr('dockera store'), () => [{ label: tr('Change location…'), onClick: () => openDialog((close) => <LocationDialog ep={ep} stack={s} onClose={close} />) }]],
                 s.working_dir && [tr('Directory'), <span className="mono small">{s.working_dir}</span>, () => [{ label: tr('Copy directory'), onClick: () => copy(s.working_dir!) }]],
+                s.location?.env_file && ['.env', <span className="mono small">{s.location.env_file}</span>],
                 data.files && [tr('Files'), <span className="mono small">{data.files.files.map((f) => f.name).join(' + ')}</span>, () => data.files!.files.map((f) => ({ label: tr('Copy path of {0}', f.name), onClick: () => copy(f.path) }))],
                 ['Editable', s.editable ? tr('Yes') : <span title={s.reason}>{tr('No ·')} {s.reason}</span>],
               ]}
@@ -411,7 +540,7 @@ function ComposeEditor({ ep, stack, files, filesError }: { ep: string; stack: St
     <div className="compose-editor">
       {!files.managed && (
         <div className="alert">
-          {tr('Editing in place:')} <code>{files.dir}</code>
+          {files.node ? tr('Editing on the node:') : tr('Editing in place:')} <code>{files.dir}</code>
           {multi && <> · {files.files.length} {tr('files that compose merges in order')}</>}
         </div>
       )}

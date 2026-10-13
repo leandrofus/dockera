@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 )
@@ -28,7 +29,16 @@ type Endpoint struct {
 	Fingerprint string `json:"fingerprint,omitempty"`
 	// SSHKey is an optional identity file for ssh endpoints.
 	SSHKey string `json:"ssh_key,omitempty"`
+	// DockerSocket is the daemon socket path on the node itself, mounted
+	// into the helper that runs compose there (default /var/run/docker.sock).
+	DockerSocket string `json:"docker_socket,omitempty"`
+	// ComposeImage provides `docker compose` on remote nodes (default docker:cli).
+	ComposeImage string `json:"compose_image,omitempty"`
 }
+
+// Local reports whether the endpoint is the daemon of the machine running
+// dockera, so stack files are read and compose runs right here.
+func (e Endpoint) Local() bool { return strings.HasPrefix(e.URL, "unix://") }
 
 type Registry struct {
 	Name     string `json:"name"`

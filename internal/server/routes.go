@@ -96,6 +96,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	e("GET /stacks/{name}/logs", s.stackLogs)
 	e("GET /stacks/{name}/merged", s.stackMerged)
 	e("POST /stacks/{name}/merge", s.stackMerge)
+	e("PUT /stacks/{name}/location", s.stackLocation)
 }
 
 func cut(pattern string) (method, path string, ok bool) {

@@ -99,6 +99,16 @@ export interface Stack {
   editable: boolean
   reason?: string
   env_file?: string
+  // kept in its own directory instead of the dockera store
+  location?: StackLocation
+  // files live on the remote node (compose runs there)
+  node?: boolean
+}
+
+export interface StackLocation {
+  dir: string
+  file?: string
+  env_file?: string
 }
 
 export interface StackFile {
@@ -113,6 +123,7 @@ export interface StackFiles {
   env_path: string
   dir: string
   managed: boolean
+  node?: boolean
 }
 
 export interface Endpoint {
@@ -122,6 +133,8 @@ export interface Endpoint {
   tls?: boolean
   fingerprint?: string
   ssh_key?: string
+  docker_socket?: string
+  compose_image?: string
   online: boolean
   error?: string
   version?: string

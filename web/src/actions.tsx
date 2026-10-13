@@ -14,6 +14,7 @@ import type { Container, Image, Network, Stack, Volume } from './lib/types'
 import type { MenuEntry } from './ui/ContextMenu'
 import { confirm, openDialog, prompt, runJob, toast } from './ui/overlays'
 import { ContainerFormDialog } from './components/ContainerForm'
+import { LocationDialog } from './pages/Stacks'
 import { setPref, getPref } from './lib/prefs'
 
 const I = 15
@@ -281,6 +282,8 @@ export function stackActions(ep: string, s: Stack): MenuEntry[] {
         multi && 'sep',
         multi && { label: tr('View merged result'), disabled: !s.editable, onClick: () => go(ep, 'stacks', s.name, 'compose') },
         multi && !s.managed && { label: tr('Merge into a single file…'), disabled: !s.editable, onClick: () => mergeStack(ep, s) },
+        s.managed && 'sep',
+        s.managed && { label: s.location ? tr('Change location…') : tr('Move to a directory…'), onClick: () => openDialog((close) => <LocationDialog ep={ep} stack={s} onClose={close} />) },
       ],
     },
     !s.managed && {
@@ -288,7 +291,7 @@ export function stackActions(ep: string, s: Stack): MenuEntry[] {
       icon: <PackagePlus size={I} />,
       onClick: async () => {
         if (!s.editable) return go(ep, 'stacks', s.name, 'compose')
-        if (!(await confirm({ title: tr('Adopt {0}', s.name), body: (multi ? tr('The compose (merging its files) will be copied to the dockera store. Note: relative paths (./data) will then resolve from the dockera directory.') : tr('The compose will be copied to the dockera store. Note: relative paths (./data) will then resolve from the dockera directory.')), confirm: tr('Adopt') }))) return
+        if (!(await confirm({ title: tr('Adopt {0}', s.name), body: (multi ? tr('The compose (merging its files) will be copied to the dockera store. Note: relative paths (./data) will then resolve from the dockera directory.') : tr('dockera will track the project in place ({0}): its files stay where they are and relative paths keep working.', s.working_dir || '')), confirm: tr('Adopt') }))) return
         act(api.post(`/e/${enc(ep)}/stacks/${enc(s.name)}/adopt`, {}), tr('{0} adopted', s.name))
       },
     },
@@ -309,7 +312,7 @@ export function stackActions(ep: string, s: Stack): MenuEntry[] {
       icon: <Trash2 size={I} />,
       danger: true,
       onClick: async () => {
-        const ok = await confirm({ title: tr('Delete {0}', s.name), body: s.managed ? tr('The containers will be taken down and the stack files stored in dockera deleted.') : tr('The containers will be taken down (the project files are not touched).'), danger: true, confirm: tr('Delete'), check: tr('Also delete the volumes') })
+        const ok = await confirm({ title: tr('Delete {0}', s.name), body: s.managed && !s.location ? tr('The containers will be taken down and the stack files stored in dockera deleted.') : tr('The containers will be taken down (the project files are not touched).'), danger: true, confirm: tr('Delete'), check: tr('Also delete the volumes') })
         if (!ok) return
         runJob(tr('Delete {0}', s.name), 'DELETE', `/e/${enc(ep)}/stacks/${enc(s.name)}?volumes=${ok.checked ? 1 : 0}`)
           .then(() => go(ep, 'stacks'))
