@@ -1,7 +1,12 @@
 ---
+import { getImage } from 'astro:assets'
 import Install from './Install.astro'
+import Icon from './Icon.astro'
 import { strings, type Lang } from '../i18n'
 import type { Release } from '../release'
+import logo from '../assets/logo.png'
+import logoDark from '../assets/logo-dark.png'
+import ship from '../assets/ship.png'
 
 interface Props {
   lang: Lang
@@ -11,64 +16,104 @@ const { lang, release } = Astro.props
 const t = strings[lang]
 const base = import.meta.env.BASE_URL.replace(/\/$/, '')
 const repo = 'https://github.com/leandrofus/ducktainer'
+const home = lang === 'en' ? `${base}/` : `${base}/es/`
+const darkLogo = await getImage({ src: logoDark, format: 'webp', quality: 92 })
+const featureIcons = ['box', 'layers', 'disk', 'grid', 'users', 'history']
+const hostIcons = ['key', 'outbound', 'shield']
 ---
-<div class="wrap">
-  <nav class="bar" aria-label="Main">
+<header class="top">
+  <nav class="wrap bar" aria-label={t.nav}>
+    <a class="brand" href={home}>
+      <img src={ship.src} alt="" width="46" height={Math.round(46 * ship.height / ship.width)} />
+      <span>ducktainer</span>
+    </a>
     <span class="grow"></span>
-    <a href={`${repo}#readme`}>{t.docs}</a>
-    <a href={`${repo}/releases`}>{t.releases}</a>
-    <a href={repo}>GitHub</a>
+    <a class="hide-sm" href={`${repo}#readme`}>{t.docs}</a>
+    <a class="hide-sm" href={`${repo}/releases`}>{t.releases}</a>
+    <a href={repo} aria-label="GitHub"><Icon name="github" /></a>
     <a class="lang" href={lang === 'en' ? `${base}/es/` : `${base}/`} hreflang={lang === 'en' ? 'es' : 'en'}>{t.otherLang}</a>
   </nav>
+</header>
 
-  <header class="hull">
-    <div class="title">
-      <img src={`${base}/ducktainer-mark.svg`} alt="" width="230" height="159" />
-      <h1 class="wordmark">ducktainer</h1>
-    </div>
-    <p class="squeak">{t.squeak}</p>
-    <dl class="plate">
-      <dt>{t.version}</dt><dd>{release?.tag ?? '—'}</dd>
-      <dt>{t.shipsAs}</dt><dd>{t.shipsAsValue}</dd>
-      <dt>{t.runsOn}</dt><dd>RHEL 9+, Fedora, Debian 12+, Ubuntu 22.04+</dd>
-    </dl>
+<section class="hero">
+  <div class="wrap hero-in">
+    <picture class="logo">
+      <source media="(prefers-color-scheme: dark)" srcset={darkLogo.src} />
+      <img src={logo.src} width={logo.width} height={logo.height} alt={`ducktainer — ${t.squeak}`} fetchpriority="high" />
+    </picture>
+    {release && (
+      <a class="pill" href={`${repo}/releases/tag/${release.tag}`}>
+        <span class="dot"></span>{t.latest} <strong>{release.tag}</strong>
+      </a>
+    )}
+    <h1>{t.headline}</h1>
     <p class="lede">{t.lede}</p>
-  </header>
+    <div class="ctas">
+      <a class="btn primary" href="#install">{t.ctaInstall}</a>
+      <a class="btn ghost" href={repo}><Icon name="github" /> {t.ctaGithub}</a>
+    </div>
+    <p class="runs">{t.shipsAsValue} · RHEL 9+ · Fedora · Debian 12+ · Ubuntu 22.04+ · macOS · Windows</p>
+  </div>
+  <svg class="waves" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
+    <path class="w1" d="M0 64 C 180 20 360 20 540 56 S 900 104 1080 64 S 1350 24 1440 48 V120 H0 Z" />
+    <path class="w2" d="M0 84 C 240 48 420 112 720 84 S 1200 52 1440 80 V120 H0 Z" />
+  </svg>
+</section>
+
+<div class="sea" id="install">
+  <Install t={t} release={release} />
 </div>
 
-<Install t={t} release={release} />
-
-<main class="wrap">
-  <section>
-    <h2 class="big">{t.featuresTitle}</h2>
-    <dl class="features">
-      {t.features.map(([name, text]) => <div><dt>{name}</dt><dd>{text}</dd></div>)}
-    </dl>
-  </section>
-
-  <section>
-    <h2 class="big">{t.hostsTitle}</h2>
-    <div class="hosts">
-      {t.hosts.map(([name, text, cmd]) => (
-        <div>
+<main>
+  <section class="wrap block">
+    <h2>{t.featuresTitle}</h2>
+    <div class="cards">
+      {t.features.map(([name, text], i) => (
+        <article class="card">
+          <span class="ico"><Icon name={featureIcons[i]} /></span>
           <h3>{name}</h3>
           <p>{text}</p>
-          <code>{cmd}</code>
-        </div>
+        </article>
       ))}
     </div>
   </section>
 
-  <section class="secure">
-    <h2 class="big">{t.secureTitle}</h2>
-    <ul>
-      {t.secure.map((s) => <li>{s}</li>)}
-    </ul>
+  <section class="wrap block">
+    <h2>{t.hostsTitle}</h2>
+    <div class="hosts">
+      {t.hosts.map(([name, text, cmd], i) => (
+        <article class="card host">
+          <span class="ico blue"><Icon name={hostIcons[i]} /></span>
+          <h3>{name}</h3>
+          <p>{text}</p>
+          <code>{cmd}</code>
+        </article>
+      ))}
+    </div>
   </section>
 
-  <footer>
+  <section class="wrap block">
+    <div class="secure">
+      <div>
+        <span class="ico big"><Icon name="shield" /></span>
+        <h2>{t.secureTitle}</h2>
+      </div>
+      <ul>
+        {t.secure.map((s) => <li><Icon name="check" />{s}</li>)}
+      </ul>
+    </div>
+  </section>
+</main>
+
+<footer class="foot">
+  <div class="wrap foot-in">
+    <a class="brand" href={home}>
+      <img src={ship.src} alt="" width="40" height={Math.round(40 * ship.height / ship.width)} />
+      <span>ducktainer</span>
+    </a>
     <span class="grow">{t.foot}</span>
     <a href={`${repo}/blob/main/README${lang === 'es' ? '.es' : ''}.md`}>{t.docs}</a>
+    <a href={`${repo}/releases`}>{t.releases}</a>
     <a href={`${repo}/issues`}>{t.issues}</a>
-  </footer>
-</main>
+  </div>
+</footer>
