@@ -494,6 +494,9 @@ func (r *Runner) env() ([]string, func(), error) {
 func (r *Runner) auths() map[string]any {
 	auths := map[string]any{}
 	for _, reg := range r.Registries {
+		if !reg.For(r.Endpoint.Name) {
+			continue
+		}
 		server := reg.Server
 		if server == "" || server == "docker.io" {
 			server = "https://index.docker.io/v1/"

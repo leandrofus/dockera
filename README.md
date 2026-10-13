@@ -97,13 +97,12 @@ The **emergency token** signs in as administrator and authorizes the API (`Autho
 ### 6. Add more Docker hosts (optional)
 
 ```sh
-# using the outbound agent (ideal for nodes behind NAT/firewall):
-# Download and install on the remote node directly from this dockera server:
-curl -kfsSL "https://<dockera-server>:9900/api/agent/install.sh?token=<token>&name=worker-1" | sh
-
-# or running the standalone binary manually:
-curl -kfsSL "https://<dockera-server>:9900/api/agent/binary?token=<token>" -o dockera-agent && chmod +x dockera-agent
-sudo ./dockera-agent agent --server "https://<dockera-server>:9900" --token "<token>" --name "worker-1"
+# using the outbound agent (ideal for nodes behind NAT/firewall): add the host
+# first (Settings → Hosts → Agent, or the line below), which gives it a token of
+# its own, then run on the node the command shown in "Copy agent install command":
+dockera endpoint add worker-1 agent://          # prints the host's token
+#   curl -fsSL -k --pinnedpubkey 'sha256//…' -H 'Authorization: Bearer <host token>' \
+#     'https://<dockera-server>:9900/api/agent/install.sh?server=…' | sudo sh
 
 # over SSH: nothing to install on the remote (key-based access; the user must be allowed to use Docker)
 sudo -u dockera ssh-keygen -t ed25519          # key in /var/lib/dockera/.ssh, add it to the remote's authorized_keys
@@ -114,6 +113,15 @@ dockera expose --allow <dockera-server-ip>   # prints the exact `dockera endpoin
 ```
 
 Hosts can also be managed from **Settings → Hosts**, and you switch between them from the top of the sidebar.
+
+- Each agent host has its own token, valid only for that host; the admin token is not accepted from agents. The install command sends it in a header, pins this server's certificate (no `--insecure`) and leaves it on the node in `/etc/dockera-agent/agent.env` (root only). Hosts registered by earlier versions with the admin token are refused until you give them a token in Settings → Hosts and reinstall the agent.
+- `tcp://` hosts must use TLS unless they are on the same machine; without `--fingerprint`, the certificate presented when the host is added is pinned.
+- SSH hosts record the host key on the first connection (`StrictHostKeyChecking=accept-new`); a changed key is refused.
+- Registry credentials can be limited to some hosts (`--hosts`, or in the UI): compose runs on a node get a copy of the credentials they are allowed to see.
+
+#### Trust model
+
+dockera controls the Docker API of every host, which is equivalent to root on them: whoever controls the dockera server (or its admin accounts) controls all hosts. Keep that machine and `/etc/dockera/secret.key` as protected as the hosts themselves. To edit stacks on a node, dockera starts a helper container there (`dockera-files`) that mounts the node's `/`; it exits after an hour idle.
 
 ---
 
@@ -137,14 +145,14 @@ Hosts can also be managed from **Settings → Hosts**, and you switch between th
 | Command | Purpose |
 |---|---|
 | `dockera serve` | Web UI + API (`--listen`, `--allow`, `--tls auto\|on\|off`, `--cert/--key`, `--expose :2376`, `--agent-listen :9901`) |
-| `dockera agent` | Outbound agent (`--server`, `--token`, `--name`, `--socket`, `--insecure`, `--fingerprint`, `--install-service`) |
+| `dockera agent` | Outbound agent (`--server`, `--name`, `--fingerprint`, `--socket`, `--install-service`; token in `DOCKERA_AGENT_TOKEN`) |
 | `dockera expose` | Publish only the Docker API, protected (allowlist + token + TLS; `--read-only`, `--no-exec`) |
 | `dockera setup [--dry-run]` | Adapt the service to the Docker installation |
 | `dockera auth show \| set … \| test <user>` | System-user sign-in and role mapping |
 | `dockera allow ls \| add \| rm` | Network allowlist |
 | `dockera token --rotate` | New emergency/API token (only its hash is stored) |
 | `dockera endpoint ls \| add \| rm` | Docker hosts (`unix://`, `ssh://user@host`, `tcp://host:2376`, `agent://name`) |
-| `dockera registry ls \| add \| rm` | Private registry credentials |
+| `dockera registry ls \| add \| rm` | Private registry credentials (`--hosts` limits which hosts get them) |
 | `dockera ps \| logs \| sh` | Containers by stack · logs of a container or a whole stack · interactive shell (picks bash/ash/sh) |
 | `dockera docker-env <host>` | `eval "$(dockera docker-env prod)"` to use the docker CLI against a host |
 

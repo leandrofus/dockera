@@ -90,13 +90,19 @@ El **token de emergencia** entra como administrador y autoriza la API. Solo se g
 **Por Agente (conexión saliente / Edge):**
 Ideal para nodos detrás de NAT, cortafuegos o con IP dinámica. El nodo descarga el agente standalone desde el propio servidor de Dockera y se conecta hacia él por un túnel saliente:
 ```sh
-# Descarga e instala en el nodo remoto (como servicio systemd o proceso en segundo plano):
-curl -kfsSL "https://<servidor-dockera>:9900/api/agent/install.sh?token=<token>&name=worker-1" | sh
-
-# O ejecutándolo directamente de forma manual:
-curl -kfsSL "https://<servidor-dockera>:9900/api/agent/binary?token=<token>" -o dockera-agent && chmod +x dockera-agent
-sudo ./dockera-agent agent --server "https://<servidor-dockera>:9900" --token "<token>" --name "worker-1"
+# 1. Da de alta el host (Configuración → Hosts → Agente, o esta línea); recibe un token propio:
+dockera endpoint add worker-1 agent://          # imprime el token del host
+# 2. En el nodo, ejecuta el comando de "Copiar comando de instalación del agente":
+#   curl -fsSL -k --pinnedpubkey 'sha256//…' -H 'Authorization: Bearer <token del host>' \
+#     'https://<servidor-dockera>:9900/api/agent/install.sh?server=…' | sudo sh
 ```
+
+- Cada host con agente tiene su propio token, válido solo para ese host; el token de administrador no se acepta desde agentes. El comando lo envía en una cabecera, fija el certificado de este servidor (sin `--insecure`) y lo deja en el nodo en `/etc/dockera-agent/agent.env` (solo root). Los hosts registrados por versiones anteriores con el token de administrador se rechazan hasta que les des un token en Configuración → Hosts y reinstales el agente.
+- Los hosts `tcp://` deben usar TLS salvo que estén en la misma máquina; sin `--fingerprint`, se fija el certificado que presenten al añadirlos.
+- Los hosts SSH registran la clave del host en la primera conexión (`StrictHostKeyChecking=accept-new`); una clave cambiada se rechaza.
+- Las credenciales de registries pueden limitarse a algunos hosts (`--hosts` o en la UI): compose ejecutado en un nodo recibe copia de las credenciales que ese host puede ver.
+
+**Modelo de confianza:** dockera controla la API de Docker de cada host, lo que equivale a root en ellos: quien controle el servidor dockera (o sus cuentas de administrador) controla todos los hosts. Protege esa máquina y `/etc/dockera/secret.key` como a los propios hosts. Para editar stacks en un nodo, dockera arranca ahí un contenedor auxiliar (`dockera-files`) que monta `/` del nodo; se cierra tras una hora sin uso.
 
 **Por SSH (sin agente):**
 ```sh

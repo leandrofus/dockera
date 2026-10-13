@@ -8,6 +8,14 @@ import (
 	"strings"
 )
 
+const (
+	envDir  = "/etc/dockera-agent"
+	envFile = envDir + "/agent.env"
+)
+
+// quote protects a value in a systemd ExecStart line.
+func quote(v string) string { return `"` + strings.ReplaceAll(v, `"`, `\"`) + `"` }
+
 // InstallService configures and enables a systemd unit for dockera-agent on Linux.
 func InstallService(cfg Config) error {
 	if runtime.GOOS != "linux" {
@@ -36,10 +44,18 @@ func InstallService(cfg Config) error {
 		}
 	}
 
+	// The token stays in a root-only file, not in the unit or on `ps`.
+	if err := os.MkdirAll(envDir, 0o700); err != nil {
+		return err
+	}
+	if err := os.WriteFile(envFile, []byte("DOCKERA_AGENT_TOKEN="+cfg.Token+"\n"), 0o600); err != nil {
+		return err
+	}
+
 	var args []string
-	args = append(args, "agent", "--server", cfg.Server, "--token", cfg.Token, "--name", cfg.Name)
+	args = append(args, "agent", "--server", quote(cfg.Server), "--name", quote(cfg.Name))
 	if cfg.Socket != "" {
-		args = append(args, "--socket", cfg.Socket)
+		args = append(args, "--socket", quote(cfg.Socket))
 	}
 	if cfg.Insecure {
 		args = append(args, "--insecure")
@@ -59,6 +75,7 @@ Requires=docker.service
 
 [Service]
 Type=simple
+EnvironmentFile=%s
 ExecStart=%s
 Restart=always
 RestartSec=5s
@@ -66,7 +83,7 @@ LimitNOFILE=65536
 
 [Install]
 WantedBy=multi-user.target
-`, execLine)
+`, envFile, execLine)
 
 	unitPath := "/etc/systemd/system/dockera-agent.service"
 	if err := os.WriteFile(unitPath, []byte(unitContent), 0o644); err != nil {

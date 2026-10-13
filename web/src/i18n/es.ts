@@ -1059,4 +1059,12 @@ export const es: Record<string, string> = {
   "Kill": "Matar",
   "A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Only its hash is stored: create a new one with": "Un único secreto que entra como administrador y autoriza la API (Authorization: Bearer). Solo se guarda su hash: crea uno nuevo con",
   "printed by `dockera expose` or `dockera token --rotate` on the host": "lo imprime `dockera expose` o `dockera token --rotate` en el host",
+  "The commands pin this server's certificate: a node cannot be fed a different binary or server. The token only works for this host and is kept on the node in /etc/dockera-agent/agent.env (root only).": "Los comandos fijan el certificado de este servidor: al nodo no se le puede colar otro binario ni otro servidor. El token solo sirve para este host y queda en el nodo en /etc/dockera-agent/agent.env (solo root).",
+  "This server is not using TLS: the token and the binary travel in clear. Serve dockera with TLS (or use --agent-listen) before enrolling nodes over an untrusted network.": "Este servidor no usa TLS: el token y el binario viajan en claro. Sirve dockera con TLS (o usa --agent-listen) antes de dar de alta nodos por una red no confiable.",
+  "Save to apply the new token, then install the agent again on the node.": "Guarda para aplicar el token nuevo y vuelve a instalar el agente en el nodo.",
+  "Save the host to get the command that installs the agent on the node.": "Guarda el host para obtener el comando que instala el agente en el nodo.",
+  "TLS certificate pinned: {0}": "Certificado TLS fijado: {0}",
+  "Without a fingerprint, the certificate presented when saving is pinned.": "Sin fingerprint, se fija el certificado que presente al guardar.",
+  "Hosts that receive them": "Hosts que las reciben",
+  "Compose runs on a node get a copy of the credentials: limit them to the hosts that need them.": "Compose ejecutado en un nodo recibe una copia de las credenciales: limítalas a los hosts que las necesiten.",
 }

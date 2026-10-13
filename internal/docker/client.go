@@ -306,3 +306,37 @@ func PeerCertPEM(ctx context.Context, ep config.Endpoint) ([]byte, bool, error) 
 	block := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: leaf.Raw})
 	return block, leaf.VerifyHostname(u.Hostname()) == nil, nil
 }
+
+// Secure checks a tcp endpoint before it is saved: off the local machine it
+// must use TLS (the token would travel in clear otherwise), and a missing
+// fingerprint is filled in from the certificate presented now, so later
+// connections are pinned to it (trust on first use).
+func Secure(ctx context.Context, ep config.Endpoint) (config.Endpoint, error) {
+	u, err := url.Parse(ep.URL)
+	if err != nil || (u.Scheme != "tcp" && u.Scheme != "http" && u.Scheme != "https") {
+		return ep, err
+	}
+	useTLS := ep.TLS || u.Scheme == "https"
+	if !useTLS {
+		if ip := net.ParseIP(u.Hostname()); u.Hostname() != "localhost" && (ip == nil || !ip.IsLoopback()) {
+			return ep, i18n.Errorf("%s: a remote tcp host needs TLS (the token would travel in clear); `dockera expose` enables it by default", ep.Name)
+		}
+		return ep, nil
+	}
+	if ep.Fingerprint != "" {
+		return ep, nil
+	}
+	d := tls.Dialer{NetDialer: &net.Dialer{Timeout: 10 * time.Second}, Config: tlsConfig("", u.Hostname())}
+	conn, err := d.DialContext(ctx, "tcp", u.Host)
+	if err != nil {
+		return ep, i18n.Errorf("%s: cannot read the TLS certificate to pin it: %v", ep.Name, err)
+	}
+	defer conn.Close()
+	certs := conn.(*tls.Conn).ConnectionState().PeerCertificates
+	if len(certs) == 0 {
+		return ep, i18n.Errorf("the server presented no certificate")
+	}
+	sum := sha256.Sum256(certs[0].Raw)
+	ep.TLS, ep.Fingerprint = true, hex.EncodeToString(sum[:])
+	return ep, nil
+}

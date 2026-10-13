@@ -40,11 +40,30 @@ type Endpoint struct {
 // dockera, so stack files are read and compose runs right here.
 func (e Endpoint) Local() bool { return strings.HasPrefix(e.URL, "unix://") }
 
+// Agent reports whether the node connects to dockera with the outbound agent.
+func (e Endpoint) Agent() bool { return strings.HasPrefix(e.URL, "agent:") }
+
 type Registry struct {
 	Name     string `json:"name"`
 	Server   string `json:"server"` // e.g. docker.io, ghcr.io, registry.example.com:5000
 	Username string `json:"username"`
 	Password string `json:"password"`
+	// Endpoints limits the hosts that receive these credentials (compose
+	// runs on the node get a copy); empty means every host.
+	Endpoints []string `json:"endpoints,omitempty"`
+}
+
+// For reports whether the credentials may be handed to an endpoint.
+func (r Registry) For(endpoint string) bool {
+	if len(r.Endpoints) == 0 {
+		return true
+	}
+	for _, e := range r.Endpoints {
+		if e == endpoint {
+			return true
+		}
+	}
+	return false
 }
 
 type TemplateSource struct {

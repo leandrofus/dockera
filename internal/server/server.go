@@ -37,6 +37,8 @@ type Server struct {
 	Listen      string
 	Expose      string
 	AgentListen string
+	// TLSCert is the server certificate (DER), pinned by agent installers.
+	TLSCert []byte
 	// TunnelPorts is the port range for ephemeral forwards, e.g. 41000-41099
 	TunnelPorts string
 

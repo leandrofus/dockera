@@ -52,7 +52,9 @@ func sshDialer(u *url.URL, identity string) func(ctx context.Context) (net.Conn,
 
 // SSHArgs builds the base ssh arguments (destination last) for a ssh:// URL.
 func SSHArgs(u *url.URL, identity string) []string {
-	args := []string{"-o", "BatchMode=yes", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30"}
+	// accept-new: the first connection records the host key (BatchMode
+	// cannot prompt), a changed key is still refused.
+	args := []string{"-o", "BatchMode=yes", "-o", "StrictHostKeyChecking=accept-new", "-o", "ConnectTimeout=10", "-o", "ServerAliveInterval=30"}
 	if p := u.Port(); p != "" {
 		args = append(args, "-p", p)
 	}

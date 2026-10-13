@@ -39,7 +39,7 @@ func Run(ctx context.Context, cfg Config) error {
 		return errors.New("server address is required (--server)")
 	}
 	if cfg.Token == "" {
-		return errors.New("agent token is required (--token)")
+		return errors.New("agent token is required (DOCKERA_AGENT_TOKEN or --token)")
 	}
 	if cfg.Name == "" {
 		h, err := os.Hostname()
@@ -120,8 +120,7 @@ func buildConnectionParams(cfg Config) (string, *tls.Config, error) {
 
 	tunnelPath := strings.TrimRight(u.Path, "/") + "/api/agent/tunnel"
 	q := url.Values{}
-	q.Set("name", cfg.Name)
-	q.Set("token", cfg.Token)
+	q.Set("name", cfg.Name) // the token goes in the Authorization header
 
 	wsURL := fmt.Sprintf("%s://%s%s?%s", scheme, u.Host, tunnelPath, q.Encode())
 

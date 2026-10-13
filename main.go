@@ -52,8 +52,8 @@ Usage:
                        (filtered by allowlist + token) for other dockera instances or the docker CLI.
   dockera expose     [--listen :2376] [--allow ...] [--read-only] [--no-exec]
                        Only publishes the Docker API, protected (no UI).
-  dockera agent      --server https://host:9900 --token <token> [--name <name>]
-                     [--socket /var/run/docker.sock] [--insecure] [--fingerprint <sha256>]
+  dockera agent      --server https://host:9900 [--name <name>] [--fingerprint <sha256>]
+                     [--socket /var/run/docker.sock] [--insecure]   (token: DOCKERA_AGENT_TOKEN)
                      [--install-service]
                        Connects this node outbound to the central dockera server (ideal behind NAT/firewall).
   dockera ui                Opens the UI locally (127.0.0.1) and launches the browser.
@@ -68,7 +68,7 @@ Usage:
   dockera allow ls | add <IP|CIDR|host>... | rm <entry>...
   dockera endpoint ls | add <name> <url> [--token T] [--tls] [--fingerprint F] [--key file] | rm <name>
                        url: unix:///var/run/docker.sock · ssh://user@host[:port] · tcp://host:2376 · agent://name
-  dockera registry ls | add <name> <server> <user> (password on stdin) | rm <name>
+  dockera registry ls | add <name> <server> <user> [--hosts h1,h2] (password on stdin) | rm <name>
   dockera docker-env <endpoint>                       Variables to use the docker CLI against an endpoint
   dockera install-service [serve flags]               Install a systemd service (root)
   dockera setup [--socket PATH] [--dry-run]           Adapt the service to the Docker installation (group,
@@ -255,6 +255,9 @@ func cmdServe(args []string, openBrowser bool) error {
 	srv := server.New(cfg, acl, web.FS())
 	cfg.Watch(srv.ReloadAccess)
 	srv.Secure = tc != nil
+	if tc != nil {
+		srv.TLSCert = tc.Certificates[0].Certificate[0]
+	}
 	srv.Version = version
 	srv.Listen, srv.Expose, srv.TunnelPorts = *addr, *expose, *tunnelPorts
 	ln, err := listen(*addr, acl, tc)
@@ -318,6 +321,9 @@ func cmdServe(args []string, openBrowser bool) error {
 		}
 		if atc != nil {
 			aln = tls.NewListener(aln, atc)
+			if srv.TLSCert == nil {
+				srv.TLSCert = atc.Certificates[0].Certificate[0]
+			}
 		}
 		agentHs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 15 * time.Second}
 		go func() { errc <- agentHs.Serve(aln) }()
@@ -365,13 +371,17 @@ func waitSignal(errc chan error) error {
 func cmdAgent(args []string) error {
 	fs := flag.NewFlagSet("agent", flag.ExitOnError)
 	serverURL := fs.String("server", "", i18n.Sprintf("dockera server URL (e.g. https://dockera.example.com:9900)"))
-	token := fs.String("token", "", i18n.Sprintf("agent enrollment or admin token"))
+	token := fs.String("token", "", i18n.Sprintf("the host's agent token (or DOCKERA_AGENT_TOKEN)"))
 	name := fs.String("name", "", i18n.Sprintf("node name (defaults to hostname)"))
 	socket := fs.String("socket", "", i18n.Sprintf("local Docker socket path (default /var/run/docker.sock)"))
 	insecure := fs.Bool("insecure", false, i18n.Sprintf("skip TLS certificate verification (useful for self-signed certificates)"))
 	fp := fs.String("fingerprint", "", i18n.Sprintf("expected sha256 fingerprint of the server certificate"))
 	installService := fs.Bool("install-service", false, i18n.Sprintf("install and start as a systemd service (Linux)"))
 	fs.Parse(args)
+	if *token == "" {
+		// preferred: keeps the token out of `ps` and of the unit file
+		*token = os.Getenv("DOCKERA_AGENT_TOKEN")
+	}
 
 	cfg := agent.Config{
 		Server:      *serverURL,
@@ -621,6 +631,23 @@ func cmdEndpoint(args []string) error {
 		}
 		fs.Parse(args[3:])
 		ep := config.Endpoint{Name: args[1], URL: args[2], Token: *token, TLS: *useTLS || *fp != "", Fingerprint: *fp, SSHKey: *key}
+		if ep.Agent() {
+			if ep.URL == "agent://" || ep.URL == "agent:" {
+				ep.URL = "agent://" + ep.Name
+			}
+			if ep.Token == "" {
+				ep.Token = config.NewToken()
+			}
+			i18n.Printf("agent token for %s: %s\n  (Settings → Hosts → Copy agent install command gives the full, pinned command)\n", ep.Name, ep.Token)
+		}
+		pinned, err := docker.Secure(context.Background(), ep)
+		if err != nil {
+			return err
+		}
+		if pinned.Fingerprint != ep.Fingerprint {
+			i18n.Fprintf(os.Stderr, "pinned TLS certificate sha256 %s\n", pinned.Fingerprint)
+		}
+		ep = pinned
 		c, err := docker.New(ep)
 		if err != nil {
 			return err
@@ -674,11 +701,15 @@ func cmdRegistry(args []string) error {
 	switch args[0] {
 	case "add":
 		if len(args) < 4 {
-			return i18n.Errorf("usage: echo $PASS | dockera registry add <name> <server> <user>")
+			return i18n.Errorf("usage: echo $PASS | dockera registry add <name> <server> <user> [--hosts h1,h2]")
 		}
+		fs := flag.NewFlagSet("registry add", flag.ExitOnError)
+		var hosts listFlag
+		fs.Var(&hosts, "hosts", i18n.Sprintf("only hand these credentials to these hosts (default: all)"))
+		fs.Parse(args[4:])
 		i18n.Fprintf(os.Stderr, "password/token: ")
 		pass, _ := bufio.NewReader(os.Stdin).ReadString('\n')
-		reg := config.Registry{Name: args[1], Server: args[2], Username: args[3], Password: strings.TrimSpace(pass)}
+		reg := config.Registry{Name: args[1], Server: args[2], Username: args[3], Password: strings.TrimSpace(pass), Endpoints: hosts}
 		return cfg.Update(func(c *config.Config) error {
 			for i, r := range c.Registry {
 				if r.Name == reg.Name {

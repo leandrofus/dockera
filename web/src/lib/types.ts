@@ -148,6 +148,8 @@ export interface Registry {
   server: string
   username: string
   password: string
+  /** hosts that receive these credentials; empty = all */
+  endpoints?: string[]
 }
 
 export interface Spec {

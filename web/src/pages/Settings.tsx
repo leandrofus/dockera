@@ -12,6 +12,46 @@ import { Empty, Spinner, Tabs, Tag } from '../ui/common'
 import { useMenu } from '../ui/ContextMenu'
 import { Modal, confirm, openDialog, toast } from '../ui/overlays'
 
+interface AgentInstall {
+  install: string
+  manual: string
+  tls: boolean
+}
+
+const agentInstall = (name: string) => api.get<AgentInstall>(`/endpoints/${enc(name)}/agent-install?server=${enc(window.location.origin)}`)
+
+/** Enrollment commands for a saved agent host (token in a header, server key pinned). */
+function AgentCommands({ name }: { name: string }) {
+  const [cmds, setCmds] = useState<AgentInstall | null>(null)
+  const [err, setErr] = useState('')
+  useEffect(() => {
+    agentInstall(name).then(setCmds).catch((e) => setErr(e.message))
+  }, [name])
+  if (err) return <div className="alert alert-bad">{err}</div>
+  if (!cmds) return <Spinner />
+  const box = (cmd: string) => (
+    <div style={{ background: 'var(--bg-code, #18181b)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border, #27272a)' }}>
+      <code className="mono small" style={{ wordBreak: 'break-all', userSelect: 'all' }}>{cmd}</code>
+    </div>
+  )
+  return (
+    <div style={{ marginTop: 12 }}>
+      <div className="row gap" style={{ marginBottom: 4 }}>
+        <span className="small muted grow"><strong>{tr('Run this command on the remote node:')}</strong></span>
+        <button type="button" className="btn btn-sm" onClick={() => { copy(cmds.install); toast.ok(tr('Command copied')) }}><ClipboardCopy size={13} /> {tr('Copy')}</button>
+      </div>
+      {box(cmds.install)}
+      <details style={{ marginTop: 8 }}>
+        <summary className="small muted" style={{ cursor: 'pointer' }}>{tr('Or standalone manual command (without script)')}</summary>
+        <div style={{ marginTop: 4 }}>{box(cmds.manual)}</div>
+      </details>
+      <p className="help">{cmds.tls
+        ? tr('The commands pin this server\'s certificate: a node cannot be fed a different binary or server. The token only works for this host and is kept on the node in /etc/dockera-agent/agent.env (root only).')
+        : tr('This server is not using TLS: the token and the binary travel in clear. Serve dockera with TLS (or use --agent-listen) before enrolling nodes over an untrusted network.')}</p>
+    </div>
+  )
+}
+
 function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () => void }) {
   const [f, setF] = useState(() => {
     const isNew = !initial
@@ -47,21 +87,19 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
   const save = async (test: boolean) => {
     setBusy(true)
     try {
-      await api.post('/endpoints', { ...f, original: initial?.name ?? '', test })
+      const res = await api.post<{ fingerprint?: string }>('/endpoints', { ...f, original: initial?.name ?? '', test })
       toast.ok(tr('Host {0} saved', f.name))
+      if (res.fingerprint && res.fingerprint !== f.fingerprint) toast.ok(tr('TLS certificate pinned: {0}', res.fingerprint.slice(0, 16) + '…'))
       invalidate('/endpoints')
       onClose()
+      // a new agent host: show its install command right away
+      if (scheme === 'agent' && !initial) openDialog((c) => <EndpointDialog initial={{ ...f, url: `agent://${f.name}`, token: '••••' } as Endpoint} onClose={c} />)
     } catch (e) {
       toast.err(e)
     } finally {
       setBusy(false)
     }
   }
-
-  const origin = window.location.origin
-  const nodeName = f.name || 'node-1'
-  const installCmd = `curl -kfsSL "${origin}/api/agent/install.sh?token=${f.token}&name=${nodeName}" | sh`
-  const manualCmd = `curl -kfsSL "${origin}/api/agent/binary?token=${f.token}" -o dockera-agent && chmod +x dockera-agent && sudo ./dockera-agent agent --server "${origin}" --token "${f.token}" --name "${nodeName}"`
 
   return (
     <Modal title={initial ? tr('Edit {0}', initial.name) : tr('Add host')} icon={<Server size={18} />} onClose={onClose} footer={<>
@@ -100,21 +138,9 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
                 <button type="button" className="btn" title={tr('Generate new token')} onClick={() => setF({ ...f, token: Array.from(crypto.getRandomValues(new Uint8Array(16))).map((b) => b.toString(16).padStart(2, '0')).join('') })}><RefreshCw size={14} /></button>
               </div>
             </div>
-            <div style={{ marginTop: 12 }}>
-              <div className="row gap" style={{ marginBottom: 4 }}>
-                <span className="small muted grow"><strong>{tr('Run this command on the remote node:')}</strong></span>
-                <button type="button" className="btn btn-sm" onClick={() => { copy(installCmd); toast.ok(tr('Command copied')) }}><ClipboardCopy size={13} /> {tr('Copy')}</button>
-              </div>
-              <div style={{ background: 'var(--bg-code, #18181b)', padding: '8px 12px', borderRadius: 6, border: '1px solid var(--border, #27272a)' }}>
-                <code className="mono small" style={{ wordBreak: 'break-all', userSelect: 'all' }}>{installCmd}</code>
-              </div>
-              <details style={{ marginTop: 8 }}>
-                <summary className="small muted" style={{ cursor: 'pointer' }}>{tr('Or standalone manual command (without script)')}</summary>
-                <div style={{ background: 'var(--bg-code, #18181b)', padding: '8px 12px', borderRadius: 6, marginTop: 4, border: '1px solid var(--border, #27272a)' }}>
-                  <code className="mono small" style={{ wordBreak: 'break-all', userSelect: 'all' }}>{manualCmd}</code>
-                </div>
-              </details>
-            </div>
+            {initial && f.token === '••••'
+              ? <AgentCommands name={initial.name} />
+              : <p className="help">{initial ? tr('Save to apply the new token, then install the agent again on the node.') : tr('Save the host to get the command that installs the agent on the node.')}</p>}
           </div>
         )}
         {scheme !== 'unix' && (
@@ -131,7 +157,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
       <div className="help">
         {scheme === 'ssh' && <>{tr('Uses your')} <code>ssh</code> {tr('client and runs')} <code>docker system dial-stdio</code> {tr('on the remote:')} <strong>{tr('nothing needs to be installed')}</strong> {tr('there. Requires key-based access (no interactive password) and a user allowed to use Docker.')}</>}
         {scheme === 'agent' && <>{tr('The standalone agent is downloaded directly from this server and connects outbound. Ideal for nodes behind NAT, firewalls or dynamic IPs.')}</>}
-        {scheme === 'tcp' && <>{tr('On the remote host:')} <code>dockera expose --allow &lt;{tr('your-IP')}&gt;</code>{tr('. It prints the token and TLS fingerprint to paste here.')}</>}
+        {scheme === 'tcp' && <>{tr('Without a fingerprint, the certificate presented when saving is pinned.')} {tr('On the remote host:')} <code>dockera expose --allow &lt;{tr('your-IP')}&gt;</code>{tr('. It prints the token and TLS fingerprint to paste here.')}</>}
         {scheme === 'unix' && <>{tr('Docker socket of the machine running dockera.')}</>}
       </div>
     </Modal>
@@ -150,7 +176,7 @@ function Hosts() {
     ...(e.url.startsWith('agent://') ? [{
       label: tr('Copy agent install command'),
       icon: <ClipboardCopy size={14} />,
-      onClick: () => copy(`curl -kfsSL "${window.location.origin}/api/agent/install.sh?token=${e.token || ''}&name=${e.name}" | sh`),
+      onClick: () => agentInstall(e.name).then((c) => { copy(c.install); toast.ok(tr('Command copied')) }).catch(toast.err),
     }] : []),
     'sep' as const,
     { label: tr('Delete…'), icon: <Trash2 size={14} />, danger: true, onClick: async () => {
@@ -187,8 +213,10 @@ function Hosts() {
 }
 
 function RegistryDialog({ ep, initial, onClose }: { ep: string; initial?: Registry; onClose: () => void }) {
-  const [f, setF] = useState({ name: initial?.name ?? '', server: initial?.server ?? 'docker.io', username: initial?.username ?? '', password: initial?.password ?? '' })
+  const [f, setF] = useState({ name: initial?.name ?? '', server: initial?.server ?? 'docker.io', username: initial?.username ?? '', password: initial?.password ?? '', endpoints: initial?.endpoints ?? [] })
   const [busy, setBusy] = useState(false)
+  const hosts = useResource<Endpoint[]>('/endpoints').data
+  const toggleHost = (h: string, on: boolean) => setF({ ...f, endpoints: on ? [...f.endpoints, h] : f.endpoints.filter((x) => x !== h) })
   return (
     <Modal title={initial ? tr('Edit {0}', initial.name) : tr('Add registry')} icon={<KeyRound size={18} />} onClose={onClose} footer={<>
       <button className="btn" onClick={onClose}>{tr('Cancel')}</button>
@@ -215,7 +243,16 @@ function RegistryDialog({ ep, initial, onClose }: { ep: string; initial?: Regist
         <label className="field"><span>{tr('User')}</span><input value={f.username} onChange={(e) => setF({ ...f, username: e.target.value })} /></label>
         <label className="field"><span>{tr('Password / token')}</span><input type="password" value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></label>
       </div>
-      <p className="help">{tr('They are used automatically when pulling/pushing images from that server and in compose deployments.')}</p>
+      <div className="field" style={{ marginTop: 12 }}>
+        <span>{tr('Hosts that receive them')}</span>
+        <div className="row gap wrap">
+          <label className="check"><input type="checkbox" checked={f.endpoints.length === 0} onChange={(e) => e.target.checked && setF({ ...f, endpoints: [] })} /> {tr('All')}</label>
+          {(hosts || []).map((h) => (
+            <label key={h.name} className="check"><input type="checkbox" checked={f.endpoints.includes(h.name)} onChange={(e) => toggleHost(h.name, e.target.checked)} /> {h.name}</label>
+          ))}
+        </div>
+      </div>
+      <p className="help">{tr('They are used automatically when pulling/pushing images from that server and in compose deployments.')} {tr('Compose runs on a node get a copy of the credentials: limit them to the hosts that need them.')}</p>
     </Modal>
   )
 }
@@ -233,7 +270,7 @@ function Registries({ ep }: { ep: string }) {
       <div className="table-wrap">
         {!!data?.length && (
           <table className="table">
-            <thead><tr><th>{tr('Name')}</th><th>{tr('Server')}</th><th>{tr('User')}</th><th style={{ width: 40 }} /></tr></thead>
+            <thead><tr><th>{tr('Name')}</th><th>{tr('Server')}</th><th>{tr('User')}</th><th>{tr('Hosts')}</th><th style={{ width: 40 }} /></tr></thead>
             <tbody>
               {data.map((r) => (
                 <tr key={r.name} onDoubleClick={() => openDialog((c) => <RegistryDialog ep={ep} initial={r} onClose={c} />)} onContextMenu={menu(() => [
@@ -245,6 +282,7 @@ function Registries({ ep }: { ep: string }) {
                   <td><strong>{r.name}</strong></td>
                   <td className="mono small">{r.server}</td>
                   <td>{r.username}</td>
+                  <td className="small">{r.endpoints?.length ? r.endpoints.join(', ') : <span className="muted">{tr('All')}</span>}</td>
                   <td><button className="icon-btn" onClick={() => api.del(`/registries/${enc(r.name)}`).then(() => invalidate('/registries')).catch(toast.err)}><Trash2 size={14} /></button></td>
                 </tr>
               ))}

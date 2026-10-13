@@ -103,6 +103,11 @@ func (s *Server) saveEndpoint(w http.ResponseWriter, r *http.Request) {
 	if prev, ok := s.Cfg.Endpoint(body.Original); ok && (ep.Token == "••••") {
 		ep.Token = prev.Token
 	}
+	ep, err := docker.Secure(r.Context(), ep)
+	if err != nil {
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
 	c, err := docker.New(ep)
 	if err == nil && (!strings.HasPrefix(ep.URL, "agent://") || agent.DefaultHub.IsOnline(ep.Name)) {
 		err = c.Ping(r.Context())
@@ -133,7 +138,7 @@ func (s *Server) saveEndpoint(w http.ResponseWriter, r *http.Request) {
 	}
 	s.dropClient(body.Original)
 	s.dropClient(ep.Name)
-	writeJSON(w, map[string]bool{"ok": true})
+	writeJSON(w, map[string]any{"ok": true, "fingerprint": ep.Fingerprint})
 }
 
 func (s *Server) deleteEndpoint(w http.ResponseWriter, r *http.Request) {

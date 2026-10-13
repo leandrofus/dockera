@@ -85,7 +85,10 @@ func TestAgentTunnelAndDial(t *testing.T) {
 			return
 		}
 		name := r.URL.Query().Get("name")
-		token := r.URL.Query().Get("token")
+		if r.URL.Query().Has("token") {
+			t.Errorf("the token must not travel in the URL")
+		}
+		token := strings.TrimPrefix(r.Header.Get("Authorization"), "Bearer ")
 		if token != "secret-token" {
 			http.Error(w, "bad token", http.StatusUnauthorized)
 			return
