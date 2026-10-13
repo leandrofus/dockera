@@ -52,8 +52,14 @@ jobs:
           & $docker compose version
           & $docker run --rm mcr.microsoft.com/windows/nanoserver:ltsc2022 cmd /c echo hello from a native engine
           if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          & $docker run -d --name squeak-native mcr.microsoft.com/windows/nanoserver:ltsc2022 ping -t localhost
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
       - name: ducktainer talks to it (npipe endpoint)
-        run: .\ducktainer.exe ps
+        shell: pwsh
+        run: |
+          $out = .\ducktainer.exe ps | Out-String
+          $out
+          if ($out -notmatch 'squeak-native') { throw 'ducktainer does not see the container' }
 
   wsl:
     # Linux containers: Docker in a WSL 2 distribution of ducktainer's own
@@ -76,6 +82,19 @@ jobs:
       - name: ducktainer engine status
         run: .\ducktainer.exe engine status
       - name: Run a Linux container through the new engine
-        run: wsl.exe -d ducktainer -u root -- docker run --rm hello-world
+        run: |
+          wsl.exe -d ducktainer -u root -- docker run --rm hello-world
+          wsl.exe -d ducktainer -u root -- docker run -d --name squeak-wsl alpine sleep 600
       - name: ducktainer talks to it (wsl endpoint)
-        run: .\ducktainer.exe ps -e wsl
+        shell: pwsh
+        run: |
+          $out = .\ducktainer.exe ps -e wsl | Out-String
+          $out
+          if ($out -notmatch 'squeak-wsl') { throw 'ducktainer does not see the container' }
+      - name: The distribution keeps running without a terminal attached
+        shell: pwsh
+        run: |
+          Start-Sleep -Seconds 30
+          $out = .\ducktainer.exe ps -e wsl | Out-String
+          if ($out -notmatch 'squeak-wsl') { throw 'the container stopped with the distribution' }
+          wsl.exe -l -v
