@@ -25,10 +25,34 @@ const t = strings[lang]
     <a href={docsPath(lang)} aria-current={active === 'docs' ? 'page' : undefined}>{t.docs}</a>
     <a class="hide-sm" href={`${REPO_URL}/releases`}>{t.releases}</a>
     <a href={REPO_URL} aria-label="GitHub"><Icon name="github" /></a>
-    {LANGS.filter((l) => l !== lang).map((l) => (
-      <a class="lang" href={alternates[l]} hreflang={l} lang={l} title={langName[l]}>
-        <span class="lang-name">{langName[l]}</span><span class="lang-code">{l.toUpperCase()}</span>
-      </a>
-    ))}
+    <details class="langmenu">
+      <summary aria-label={`${t.language}: ${langName[lang]}`}>
+        <Icon name="globe" />
+        <span class="lang-name">{langName[lang]}</span><span class="lang-code">{lang.toUpperCase()}</span>
+        <span class="chev"><Icon name="chevron" /></span>
+      </summary>
+      <ul>
+        {LANGS.map((l) => (
+          <li>
+            <a href={alternates[l]} hreflang={l} lang={l} aria-current={l === lang ? 'true' : undefined}>
+              {langName[l]}{l === lang && <Icon name="check" />}
+            </a>
+          </li>
+        ))}
+      </ul>
+    </details>
   </nav>
 </header>
+<script>
+  // close the language menu on a click outside it or on Escape
+  const menu = document.querySelector<HTMLDetailsElement>('.langmenu')
+  document.addEventListener('click', (e) => {
+    if (menu?.open && !menu.contains(e.target as Node)) menu.open = false
+  })
+  document.addEventListener('keydown', (e) => {
+    if (e.key === 'Escape' && menu?.open) {
+      menu.open = false
+      menu.querySelector('summary')?.focus()
+    }
+  })
+</script>

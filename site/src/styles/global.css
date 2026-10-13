@@ -76,12 +76,34 @@ h1, h2, h3 { font-family: Montserrat, "IBM Plex Sans", sans-serif; letter-spacin
 .brand { display: inline-flex; align-items: center; gap: 10px; text-decoration: none; color: var(--ink); }
 .brand img { display: block; height: auto; }
 .brand span { font: 800 19px Montserrat, sans-serif; letter-spacing: -.01em; }
-.lang {
-  border: 1px solid var(--rule); background: var(--card);
-  padding: 5px 12px; border-radius: 999px; font-size: 14px;
+/* language menu: the current language, the others in a popover */
+.langmenu { position: relative; }
+.langmenu summary {
+  display: inline-flex; align-items: center; gap: 6px; cursor: pointer; list-style: none;
+  border: 1px solid var(--rule); background: var(--card); color: var(--ink);
+  padding: 5px 10px 5px 11px; border-radius: 999px; font-size: 14px; font-weight: 500;
+  transition: border-color .15s, background-color .15s;
 }
-.on-hero .lang { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .2); }
+.langmenu summary::-webkit-details-marker { display: none; }
+.langmenu summary:hover, .langmenu[open] summary { border-color: var(--link); }
+.langmenu summary .icon { width: 1.05em; height: 1.05em; vertical-align: 0; }
+.langmenu .chev { display: inline-flex; opacity: .6; transition: transform .15s; }
+.langmenu[open] .chev { transform: rotate(180deg); }
 .lang-code { display: none; }
+.on-hero .langmenu summary { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .2); color: var(--on-night); }
+.on-hero .langmenu summary:hover, .on-hero .langmenu[open] summary { border-color: var(--duck); }
+.langmenu ul {
+  position: absolute; right: 0; top: calc(100% + 8px); z-index: 20;
+  min-width: 168px; margin: 0; padding: 6px; list-style: none;
+  background: var(--card); border: 1px solid var(--rule); border-radius: 12px; box-shadow: var(--shadow);
+}
+.langmenu li a {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  padding: 8px 10px; border-radius: 8px; color: var(--ink); text-decoration: none; font-size: 14px;
+}
+.langmenu li a:hover { background: color-mix(in srgb, var(--link) 10%, transparent); }
+.langmenu li a[aria-current] { font-weight: 600; color: var(--link); }
+.langmenu li .icon { width: 1em; height: 1em; vertical-align: 0; }
 
 /* hero: night sea, the ship in a pool of light */
 .hero {
