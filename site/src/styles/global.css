@@ -81,6 +81,7 @@ h1, h2, h3 { font-family: Montserrat, "IBM Plex Sans", sans-serif; letter-spacin
   padding: 5px 12px; border-radius: 999px; font-size: 14px;
 }
 .on-hero .lang { background: rgba(255, 255, 255, .08); border-color: rgba(255, 255, 255, .2); }
+.lang-code { display: none; }
 
 /* hero: night sea, the ship in a pool of light */
 .hero {
@@ -301,6 +302,8 @@ h1, h2, h3 { font-family: Montserrat, "IBM Plex Sans", sans-serif; letter-spacin
   .wrap { padding: 0 16px; }
   .bar { gap: 14px; }
   .hide-sm { display: none; }
+  .lang-name { display: none; }
+  .lang-code { display: inline; }
   .hero { padding-bottom: 130px; }
   .waves { height: 80px; }
   .install-wrap { margin-top: -80px; }

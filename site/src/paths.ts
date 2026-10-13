@@ -6,7 +6,7 @@ const base = import.meta.env.BASE_URL.replace(/\/$/, '')
 
 /** The site's home page in a language. */
 export function homePath(lang: Lang): string {
-  return lang === 'en' ? `${base}/` : `${base}/es/`
+  return lang === 'en' ? `${base}/` : `${base}/${lang}/`
 }
 
 /** A documentation page; an empty slug is the docs index. */

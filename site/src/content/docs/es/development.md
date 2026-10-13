@@ -37,6 +37,7 @@ El inglés es el idioma de origen. Para añadir un idioma:
 
 1. Copia `web/src/i18n/es.ts` (UI) e `internal/i18n/es.go` (errores de la API y CLI). Las claves son los textos en inglés; las claves `ctx|texto` son variantes de género y número que usa `tc()`.
 2. Registra el nuevo catálogo en `web/src/i18n/index.ts` y en `internal/i18n/i18n.go`.
+3. Ejecuta `make test`: `internal/i18n/catalog_test.go` falla si a un catálogo le falta un mensaje que el código traduce, o si conserva uno que el código ya no usa.
 
 ## Versiones
 
