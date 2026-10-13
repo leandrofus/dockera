@@ -8,12 +8,19 @@ order: 2
 
 The packages are the recommended way. They work on RHEL/Alma/Rocky 9+, Fedora, Debian 12+ and Ubuntu 22.04+, on amd64 and arm64. Docker must already be installed, because the package depends on it.
 
-Download the package for your system from the [latest release](https://github.com/leandrofus/ducktainer/releases/latest), then:
+Download the package for your system and install it (all files are on the [releases page](https://github.com/leandrofus/ducktainer/releases/latest)):
 
 ```sh
-sudo dnf install ./ducktainer-0.1.0-1.x86_64.rpm     # RHEL / Fedora
-sudo apt install ./ducktainer_0.1.0-1_amd64.deb      # Debian / Ubuntu
+# RHEL / Fedora
+curl -fLO https://github.com/leandrofus/ducktainer/releases/latest/download/ducktainer-latest.x86_64.rpm
+sudo dnf install ./ducktainer-latest.x86_64.rpm
+
+# Debian / Ubuntu
+curl -fLO https://github.com/leandrofus/ducktainer/releases/latest/download/ducktainer_latest_amd64.deb
+sudo apt install ./ducktainer_latest_amd64.deb
 ```
+
+On arm64 use `ducktainer-latest.aarch64.rpm` or `ducktainer_latest_arm64.deb`. These links always point to the latest release.
 
 The package:
 

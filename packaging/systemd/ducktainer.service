@@ -22,6 +22,8 @@ StateDirectory=ducktainer
 StateDirectoryMode=0750
 NoNewPrivileges=yes
 ProtectSystem=full
+# start menu entries for containers (created by `ducktainer setup` on desktops)
+ReadWritePaths=-/usr/local/share/applications/ducktainer-containers
 PrivateTmp=yes
 ProtectKernelTunables=yes
 ProtectKernelModules=yes

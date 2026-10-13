@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Shield, ShieldCheck, Users, Globe, KeyRound, ClipboardCopy, Check, Plus, X, AlertTriangle, Terminal, RefreshCw, UserPlus, Lock, LockOpen, Eye } from 'lucide-react'
+import { Shield, ShieldCheck, Users, Globe, KeyRound, ClipboardCopy, Check, Plus, X, AlertTriangle, Terminal, RefreshCw, UserPlus, Lock, LockOpen, Eye, AppWindow } from 'lucide-react'
 import { api } from '../lib/api'
 import { useResource } from '../lib/store'
 import { usePref } from '../lib/prefs'
@@ -8,6 +8,7 @@ import { Avatar, Empty, Spinner, Tabs, Tag } from '../ui/common'
 import { useMenu } from '../ui/ContextMenu'
 import { Drawer, confirm, toast } from '../ui/overlays'
 import { t } from '../i18n'
+import { StartMenu, useShortcuts } from '../components/Shortcuts'
 
 interface Group {
   name: string
@@ -56,7 +57,7 @@ interface Draft {
   auth: AuthT
 }
 
-type Sub = 'people' | 'network' | 'signin'
+type Sub = 'people' | 'network' | 'signin' | 'startmenu'
 
 const roleLabel = (r: string) => (r === 'admin' ? t('Administrator') : t('Read-only'))
 
@@ -536,6 +537,7 @@ export function AccessSettings() {
   const info = useResource<AccessInfo>('/settings/access')
   const settings = useResource<SettingsT>('/settings')
   const [sub, setSub] = usePref<Sub>('access.tab', 'people')
+  const menu = useShortcuts()
   const [draft, setDraft] = useState<Draft | null>(null)
   const [busy, setBusy] = useState(false)
   const saved: Draft | null = settings.data && info.data ? { allow: info.data.allow, auth: settings.data.auth } : null
@@ -567,7 +569,7 @@ export function AccessSettings() {
   const label = (id: Sub, text: string, icon: React.ReactNode) => (
     <>
       {icon} {text}
-      {dirty[id] && <span className="dot dot-accent" title={t('Unsaved changes')} />}
+      {dirty[id as keyof typeof dirty] && <span className="dot dot-accent" title={t('Unsaved changes')} />}
     </>
   )
   const changes = Object.values(dirty).filter(Boolean).length
@@ -582,11 +584,13 @@ export function AccessSettings() {
           { id: 'people', label: label('people', t('People'), <Users size={13} />) },
           { id: 'network', label: label('network', t('Network'), <Globe size={13} />) },
           { id: 'signin', label: label('signin', t('Sign-in'), <KeyRound size={13} />) },
+          ...(menu.data?.info.supported ? [{ id: 'startmenu', label: label('startmenu', t('Start menu'), <AppWindow size={13} />) }] : []),
         ]}
       />
       {sub === 'people' && <People info={info.data} draft={draft} setAuth={setAuth} go={setSub} />}
       {sub === 'network' && <Network info={info.data} draft={draft} setAllow={setAllow} />}
       {sub === 'signin' && <SignIn info={info.data} draft={draft} setAuth={setAuth} />}
+      {sub === 'startmenu' && <StartMenu />}
       {(dirtyAuth || dirtyAllow) && (
         <div className="savebar dirty">
           <span>{changes === 1 ? t('Unsaved changes in 1 section') : t('Unsaved changes in {0} sections', changes)}</span>

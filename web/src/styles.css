@@ -810,3 +810,23 @@ mark { background: #fde68a; color: #111; border-radius: 2px; }
 .jump-conn-row { display: flex; align-items: center; gap: 6px; min-width: 0; }
 .jump-conn-row code { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
 .jump-conn-row > :not(code) { flex-shrink: 0; }
+
+/* expose to the internet (Cloudflare) */
+.settings-stack { display: flex; flex-direction: column; gap: 14px; max-width: 980px; }
+.expose-form { display: flex; flex-direction: column; gap: 14px; }
+.expose-kinds { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.expose-kind { display: flex; flex-direction: column; gap: 4px; text-align: left; padding: 10px 12px; border: 1px solid var(--border); border-radius: 9px; background: var(--surface); color: var(--text); cursor: pointer; font: inherit; }
+.expose-kind:hover { border-color: var(--border-strong); }
+.expose-kind.on { border-color: var(--accent); background: var(--accent-soft); }
+.expose-access { display: flex; flex-direction: column; gap: 10px; }
+.expose-access > .seg { align-self: flex-start; }
+.expose-access .alert { margin-bottom: 0; }
+.expose-rules { display: flex; flex-direction: column; gap: 6px; }
+.expose-rules .check svg { color: var(--muted); }
+.expose-indent { margin-left: 24px; margin-bottom: 6px; }
+.expose-indent textarea { width: 100%; }
+.expose-steps { padding-left: 18px; display: flex; flex-direction: column; gap: 6px; }
+.expose-steps ul { padding-left: 16px; margin: 4px 0 0; }
+@media (max-width: 640px) { .expose-kinds { grid-template-columns: 1fr; } }
+.expose-access input[type='checkbox'] { width: auto; }
+.expose-rules > .check { align-self: flex-start; }

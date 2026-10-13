@@ -37,3 +37,7 @@ English is the source language. To add a language:
 
 1. Copy `web/src/i18n/es.ts` (UI) and `internal/i18n/es.go` (API errors and CLI). Keys are the English strings; `ctx|text` keys are gender/number variants used by `tc()`.
 2. Register the new catalog in `web/src/i18n/index.ts` and `internal/i18n/i18n.go`.
+
+## Releases
+
+The version lives in `web/package.json`. To publish one, bump it in your pull request: when the merge reaches `main`, the Tag workflow creates the `v<version>` tag and starts the release, which builds the packages and binaries and rebuilds this site. Merges that don't change the version publish nothing.

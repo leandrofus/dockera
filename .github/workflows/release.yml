@@ -1,10 +1,14 @@
 name: Release
 
-# Push a tag like v0.2.0: builds the rpm/deb packages (amd64, arm64, with
-# PAM) and the static binaries, and attaches them to the GitHub release.
+# Runs on a tag like v0.2.0: tag.yml creates it (and starts this workflow)
+# when a version bump reaches main; pushing one by hand works too. Builds the
+# rpm/deb packages (amd64, arm64, with PAM) and the static binaries, and
+# attaches them to the GitHub release, plus version-less "latest" copies of
+# the packages for stable links.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch: # tag.yml, on the new tag
 
 permissions:
   contents: write
@@ -15,6 +19,8 @@ concurrency:
 
 jobs:
   release:
+    # a manual run on a branch must not publish anything
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
@@ -34,9 +40,24 @@ jobs:
         run: make packages PKG_VERSION="${GITHUB_REF_NAME#v}"
       - name: Static binaries
         run: make dist VERSION="$GITHUB_REF_NAME"
-      - name: Checksums
+      - name: Latest aliases
+        # Version-less copies of the packages, so that
+        # releases/latest/download/<name> always serves the newest release
+        # (the binaries already have version-less names).
         run: |
           cp dist/packages/* dist/
+          cd dist
+          for f in ducktainer-*.rpm; do
+            arch=${f%.rpm}; arch=${arch##*.}           # ducktainer-1.2.0-1.x86_64.rpm -> x86_64
+            cp "$f" "ducktainer-latest.$arch.rpm"
+          done
+          for f in ducktainer_*.deb; do
+            arch=${f##*_}; arch=${arch%.deb}            # ducktainer_1.2.0-1_amd64.deb -> amd64
+            cp "$f" "ducktainer_latest_$arch.deb"
+          done
+          ls -l ducktainer-latest.* ducktainer_latest_*
+      - name: Checksums
+        run: |
           cd dist && sha256sum ducktainer-*.rpm ducktainer_*.deb ducktainer-linux-* ducktainer-darwin-* ducktainer-windows-* > SHA256SUMS
       - name: Publish
         env:

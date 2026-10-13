@@ -36,6 +36,7 @@ import (
 	"ducktainer/internal/proxy"
 	"ducktainer/internal/server"
 	"ducktainer/internal/setup"
+	"ducktainer/internal/shortcuts"
 	"ducktainer/internal/tlsutil"
 	"ducktainer/packaging"
 	"ducktainer/web"
@@ -266,6 +267,9 @@ func cmdServe(args []string, openBrowser bool) error {
 	}
 	srv.Version = version
 	srv.Listen, srv.Expose, srv.TunnelPorts = *addr, *expose, *tunnelPorts
+	srv.StartExposures()
+	defer srv.StopExposures()
+	srv.StartShortcuts()
 	ln, err := listen(*addr, acl, tc)
 	if err != nil {
 		return err
@@ -1013,6 +1017,12 @@ func cmdSetup(args []string) error {
 		if err != nil {
 			return err
 		}
+	}
+	// start menu entries for containers (machines with a desktop)
+	if ok, err := shortcuts.InstallSystem(); err != nil {
+		i18n.Printf("warning: could not prepare the start menu: %v\n", err)
+	} else if ok && !*quiet {
+		i18n.Printf("start menu: containers can be added from Settings → Access → Start menu\n")
 	}
 	if !*quiet {
 		if plan.Mode == setup.ModeNone {
