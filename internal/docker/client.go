@@ -85,6 +85,15 @@ func New(ep config.Endpoint) (*Client, error) {
 		}
 	case "ssh":
 		c.dial = sshDialer(u, ep.SSHKey)
+	case "npipe":
+		pipe := PipePath(u)
+		c.dial = func(ctx context.Context) (net.Conn, error) { return dialPipe(ctx, pipe) }
+	case "wsl":
+		distro := u.Host
+		if distro == "" {
+			distro = strings.Trim(u.Path, "/")
+		}
+		c.dial = wslDialer(distro)
 	case "agent":
 		name := u.Host
 		if name == "" {
@@ -98,7 +107,7 @@ func New(ep config.Endpoint) (*Client, error) {
 			return agent.DefaultHub.Dial(ctx, name)
 		}
 	default:
-		return nil, i18n.Errorf("endpoint %s: unsupported scheme %q (use unix://, ssh://, tcp:// or agent://)", ep.Name, u.Scheme)
+		return nil, i18n.Errorf("endpoint %s: unsupported scheme %q (use unix://, ssh://, tcp://, agent://, npipe:// or wsl://)", ep.Name, u.Scheme)
 	}
 	c.http = &http.Client{Transport: &http.Transport{
 		DialContext: func(ctx context.Context, _, _ string) (net.Conn, error) {

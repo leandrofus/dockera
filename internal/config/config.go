@@ -11,6 +11,7 @@ import (
 	"os"
 	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -38,7 +39,9 @@ type Endpoint struct {
 
 // Local reports whether the endpoint is the daemon of the machine running
 // ducktainer, so stack files are read and compose runs right here.
-func (e Endpoint) Local() bool { return strings.HasPrefix(e.URL, "unix://") }
+func (e Endpoint) Local() bool {
+	return strings.HasPrefix(e.URL, "unix://") || strings.HasPrefix(e.URL, "npipe://")
+}
 
 // Agent reports whether the node connects to ducktainer with the outbound agent.
 func (e Endpoint) Agent() bool { return strings.HasPrefix(e.URL, "agent:") }
@@ -396,6 +399,9 @@ func (c *Config) Endpoint(name string) (Endpoint, bool) {
 func defaultLocalURL() string {
 	if h := os.Getenv("DOCKER_HOST"); h != "" {
 		return h
+	}
+	if runtime.GOOS == "windows" {
+		return "npipe:////./pipe/docker_engine"
 	}
 	return "unix:///var/run/docker.sock"
 }
