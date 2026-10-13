@@ -1,8 +1,10 @@
 # dockera
 
+[![CI](https://github.com/leandrofus/dockera/actions/workflows/ci.yml/badge.svg)](https://github.com/leandrofus/dockera/actions/workflows/ci.yml)
+
 **Agentless Docker management in a single binary.** A CRM-style web UI (right-click everything, saved views, kanban, ⌘K palette), compose stacks with a visual editor, an app marketplace, live logs and web terminals. Sign-in uses your **system users** (PAM), and network access is limited to the hosts you allow.
 
-[Español](README.es.md)
+[Español](README.es.md) · [dockera website](https://leandrofus.github.io/dockera/)
 
 - **Agentless**: remote hosts are reached over **SSH** (`docker system dial-stdio`, like `DOCKER_HOST=ssh://`) or through `dockera expose`. Nothing but Docker is needed on them.
 - **Least privilege**: the service runs as an unprivileged user. `dockera setup` adapts it to however Docker is installed: socket group, rootless or root-only. Only password checks run as root, in a socket-activated helper.

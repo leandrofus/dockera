@@ -1,0 +1,49 @@
+name: Release
+
+# Push a tag like v0.2.0: builds the rpm/deb packages (amd64, arm64, with
+# PAM) and the static binaries, and attaches them to the GitHub release.
+on:
+  push:
+    tags: ['v*']
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Web UI
+        run: cd web && npm install --no-audit --no-fund && npm run build
+      - name: Tests
+        run: go test ./...
+      - name: rpm + deb
+        run: make packages PKG_VERSION="${GITHUB_REF_NAME#v}"
+      - name: Static binaries
+        run: make dist VERSION="$GITHUB_REF_NAME"
+      - name: Checksums
+        run: |
+          cp dist/packages/* dist/
+          cd dist && sha256sum dockera-*.rpm dockera_*.deb dockera-linux-* dockera-darwin-* dockera-windows-* > SHA256SUMS
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          files="dist/*.rpm dist/*.deb dist/dockera-linux-* dist/dockera-darwin-* dist/dockera-windows-* dist/SHA256SUMS"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" $files --clobber
+          else
+            gh release create "$GITHUB_REF_NAME" $files --title "dockera ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
+          fi

@@ -1,0 +1,36 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Web dependencies
+        run: cd web && npm install --no-audit --no-fund
+      - name: Typecheck and build the UI
+        run: cd web && npm run build
+      - name: go vet
+        run: go vet ./...
+      - name: Go tests
+        run: go test -race ./...
+      - name: Build (static, and with PAM)
+        run: |
+          sudo apt-get update -qq && sudo apt-get install -y -qq libpam0g-dev
+          CGO_ENABLED=0 go build -trimpath -o /tmp/dockera .
+          CGO_ENABLED=1 go build -trimpath -tags pam -o /tmp/dockera-pam .
+      - name: Package scripts
+        run: sh -n packaging/scripts/*.sh

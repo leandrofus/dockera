@@ -1,5 +1,7 @@
 # dockera
 
+[![CI](https://github.com/leandrofus/dockera/actions/workflows/ci.yml/badge.svg)](https://github.com/leandrofus/dockera/actions/workflows/ci.yml)
+
 **Administración de Docker sin agente, en un único binario.** Incluye:
 
 - UI web tipo CRM: clic derecho en todo, vistas guardadas, kanban y paleta ⌘K;
@@ -9,7 +11,7 @@
 
 Se entra con los **usuarios del sistema** (PAM), y el acceso por red se limita a los hosts que autorices.
 
-[English](README.md)
+[English](README.md) · [sitio web](https://leandrofus.github.io/dockera/)
 
 ## Puesta en marcha
 
