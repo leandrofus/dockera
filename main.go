@@ -31,6 +31,7 @@ import (
 	"ducktainer/internal/compose"
 	"ducktainer/internal/config"
 	"ducktainer/internal/docker"
+	"ducktainer/internal/engine"
 	"ducktainer/internal/i18n"
 	"ducktainer/internal/proxy"
 	"ducktainer/internal/server"
@@ -73,6 +74,9 @@ Usage:
   ducktainer install-service [serve flags]               Install a systemd service (root)
   ducktainer setup [--socket PATH] [--dry-run]           Adapt the service to the Docker installation (group,
                                                       rootless or root) based on the detected socket
+  ducktainer engine install [--mode wsl|native] | status
+                                                      Windows: install Docker without Docker Desktop
+                                                      (wsl: Linux containers in WSL 2 · native: Windows containers)
   ducktainer version
 
 Data and configuration: %s  (change with DUCKTAINER_HOME)
@@ -128,6 +132,8 @@ func main() {
 		err = cmdInstall(args)
 	case "setup":
 		err = cmdSetup(args)
+	case "engine":
+		err = cmdEngine(args)
 	case "pam-helper":
 		err = cmdPAMHelper(args)
 	case "auth":
@@ -1015,5 +1021,50 @@ func cmdSetup(args []string) error {
 			i18n.Printf("service configured: %s\n", setup.DropIn)
 		}
 	}
+	return nil
+}
+
+// cmdEngine installs Docker on Windows without Docker Desktop.
+func cmdEngine(args []string) error {
+	if len(args) == 0 || (args[0] != "install" && args[0] != "status") {
+		return i18n.Errorf("usage: ducktainer engine install [--mode wsl|native] [--distro NAME] [--version X.Y.Z] [--sha256 HASH] [--no-keepalive] | status")
+	}
+	fs := flag.NewFlagSet("engine", flag.ExitOnError)
+	mode := fs.String("mode", "wsl", i18n.Sprintf("wsl: Linux containers in a WSL 2 distribution · native: Windows containers with dockerd.exe"))
+	distro := fs.String("distro", engine.DefaultDistro, i18n.Sprintf("WSL distribution created for Docker"))
+	ver := fs.String("version", "", i18n.Sprintf("Docker version for native mode (default: the latest)"))
+	sum := fs.String("sha256", "", i18n.Sprintf("expected sha256 of the Docker zip (native mode)"))
+	noKeep := fs.Bool("no-keepalive", false, i18n.Sprintf("do not keep the WSL distribution running at logon"))
+	fs.Parse(args[1:])
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer cancel()
+	if args[0] == "status" {
+		return engine.Status(ctx, os.Stdout, *distro)
+	}
+	res, err := engine.Install(ctx, engine.Options{Mode: *mode, Distro: *distro, Version: *ver, SHA256: *sum, NoKeepAlive: *noKeep, Out: os.Stdout})
+	if err != nil {
+		return err
+	}
+	if res.Reboot {
+		i18n.Printf("Restart Windows and run `ducktainer engine install --mode %s` again to finish.\n", *mode)
+		return nil
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if err := cfg.Update(func(c *config.Config) error {
+		for i, e := range c.Endpoints {
+			if e.Name == res.Name {
+				c.Endpoints[i].URL = res.URL
+				return nil
+			}
+		}
+		c.Endpoints = append(c.Endpoints, config.Endpoint{Name: res.Name, URL: res.URL})
+		return nil
+	}); err != nil {
+		return err
+	}
+	i18n.Printf("Docker is ready: host %s (%s). Open the UI with `ducktainer ui`.\n", res.Name, res.URL)
 	return nil
 }

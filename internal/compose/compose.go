@@ -20,7 +20,6 @@ import (
 	"sort"
 	"strings"
 
-	"ducktainer/internal/agent"
 	"ducktainer/internal/config"
 	"ducktainer/internal/docker"
 )
@@ -430,43 +429,21 @@ func (r *Runner) env() ([]string, func(), error) {
 		_ = os.Symlink(filepath.Join(home, ".docker", "cli-plugins"), filepath.Join(tmp, "cli-plugins"))
 	}
 	var toClose io.Closer
-	if u.Scheme == "agent" {
-		agentName := u.Host
-		if agentName == "" {
-			agentName = u.Path
+	if u.Scheme == "agent" || u.Scheme == "wsl" {
+		// the docker CLI cannot reach these: serve the daemon on a private
+		// local socket (a named pipe on Windows) for the duration of the run
+		if r.Client == nil {
+			os.RemoveAll(tmp)
+			return nil, nil, i18n.Errorf("cannot run compose on %s", ep.Name)
 		}
-		agentName = strings.TrimPrefix(agentName, "/")
-		if agentName == "" {
-			agentName = ep.Name
-		}
-		sockPath := filepath.Join(tmp, "docker.sock")
-		ln, err := net.Listen("unix", sockPath)
+		ln, h, err := listenPrivate(tmp)
 		if err != nil {
 			os.RemoveAll(tmp)
 			return nil, nil, err
 		}
 		toClose = ln
-		go func() {
-			for {
-				conn, err := ln.Accept()
-				if err != nil {
-					return
-				}
-				go func(c net.Conn) {
-					defer c.Close()
-					rconn, err := agent.DefaultHub.Dial(context.Background(), agentName)
-					if err != nil {
-						return
-					}
-					defer rconn.Close()
-					done := make(chan struct{}, 2)
-					go func() { _, _ = io.Copy(rconn, c); done <- struct{}{} }()
-					go func() { _, _ = io.Copy(c, rconn); done <- struct{}{} }()
-					<-done
-				}(conn)
-			}
-		}()
-		host = "unix://" + sockPath
+		go proxyDaemon(ln, r.Client)
+		host = h
 	}
 	env = append(env, "DOCKER_HOST="+host)
 
@@ -564,4 +541,26 @@ func Merge(ctx context.Context, fsys FS, f *Files, merged string) ([]string, err
 		moved = append(moved, x.Path+BackupSuffix)
 	}
 	return moved, fsys.WriteFile(ctx, base.Path, []byte(merged), 0o644)
+}
+
+// proxyDaemon forwards every connection accepted on ln to the daemon.
+func proxyDaemon(ln net.Listener, c *docker.Client) {
+	for {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		go func() {
+			defer conn.Close()
+			rconn, err := c.Dial(context.Background())
+			if err != nil {
+				return
+			}
+			defer rconn.Close()
+			done := make(chan struct{}, 2)
+			go func() { _, _ = io.Copy(rconn, conn); done <- struct{}{} }()
+			go func() { _, _ = io.Copy(conn, rconn); done <- struct{}{} }()
+			<-done
+		}()
+	}
 }
