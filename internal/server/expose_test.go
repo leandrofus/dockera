@@ -32,8 +32,9 @@ func gateFor(t *testing.T, a config.ExposeAccess) (http.Handler, *exposeRT) {
 	}))
 	t.Cleanup(backend.Close)
 	var d net.Dialer
-	rt := &exposeRT{x: config.Exposure{ID: "x1", Kind: "quick", Access: a}, addr: backend.Listener.Addr().String(), at: time.Now().Add(time.Hour),
-		dial: func(ctx context.Context, addr string) (net.Conn, error) { return d.DialContext(ctx, "tcp", addr) }}
+	rt := &exposeRT{x: config.Exposure{ID: "x1", Kind: "quick", Access: a}}
+	rt.target.addr, rt.target.at = backend.Listener.Addr().String(), time.Now().Add(time.Hour)
+	rt.target.dial = func(ctx context.Context, addr string) (net.Conn, error) { return d.DialContext(ctx, "tcp", addr) }
 	if err := rt.ips.Set(a.IPs); err != nil {
 		t.Fatal(err)
 	}

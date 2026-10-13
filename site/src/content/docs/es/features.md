@@ -37,6 +37,18 @@ Quién usa cada volumen, huérfanos, tamaños y navegación por su contenido.
 
 Unas 26 apps incluidas más cualquier lista de plantillas de Portainer v2/v3. Las listas oficial y de la comunidad, unas 800 apps, vienen preconfiguradas. Cada app se despliega como un stack editable.
 
+## Túneles
+
+La pestaña **Túneles** de Accesos tiene dos listas: **Privados**, puertos reenviados a través de este servidor ducktainer, y **Públicos**, publicados con Cloudflare (abajo). Marca "Todos los hosts" para ver los túneles de todos los hosts.
+
+Un túnel privado abre un puerto del servidor, del rango `--tunnel-ports`, que lleva al contenedor. También funciona con puertos internos y con hosts detrás de un agente o NAT. Haz clic derecho en un puerto, elige **Abrir un túnel…** y decide cuánto dura:
+
+- **Temporal**: se cierra tras 30 minutos sin conexiones. Es lo que usa "Abrir vía túnel".
+- **Por horas**: se cierra a una hora fija.
+- **Persistente**: queda abierto hasta que lo cierres.
+
+Los túneles por horas y los persistentes vuelven tras un reinicio, en el mismo puerto si está libre. Un túnel solo deja entrar a la dirección que lo abrió o, si lo eliges, a todas las direcciones permitidas en Configuración → Acceso → Red. Los túneles siguen al contenedor por nombre, así que recrearlo no los rompe. Desde la lista puedes cambiar la duración y el acceso de un túnel, o cerrarlo.
+
 ## Exponer a internet (Cloudflare)
 
 Haz clic derecho en un puerto web en **Accesos** y elige **Exponer a internet…**. ducktainer ejecuta `cloudflared` él mismo (el instalado, o una descarga fijada y con checksum verificado), así que no agrega nada a tus hosts de Docker. También funciona con puertos internos y con hosts detrás de un agente.
@@ -51,7 +63,7 @@ Quién puede abrirlo:
 - **Link secreto**: quien lo abre entra, sin cuenta. Un link nuevo revoca el anterior.
 - **Solo desde estas direcciones**: IPs, rangos CIDR o nombres de host. Esta regla se combina con las anteriores y deben cumplirse ambas.
 
-Las exposiciones pueden cerrarse solas después de un tiempo. Se listan en la pestaña **Internet** de Accesos y en Configuración → Cloudflare, y los inicios de sesión quedan en la auditoría.
+Las exposiciones pueden cerrarse solas después de un tiempo. Se listan en Públicos, en la pestaña **Túneles** de Accesos y en Configuración → Cloudflare, y los inicios de sesión quedan en la auditoría.
 
 ## Menú inicio
 

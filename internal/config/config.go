@@ -111,6 +111,24 @@ type Exposure struct {
 	Created   time.Time    `json:"created"`
 }
 
+// Forward is a port forward kept across restarts: for some hours or until
+// closed (temporary ones that close when idle live only in memory).
+type Forward struct {
+	ID        string     `json:"id"`
+	Endpoint  string     `json:"endpoint"`
+	Container string     `json:"container"` // name, so it survives a recreate
+	Port      int        `json:"port"`      // container port
+	Local     int        `json:"local_port"`
+	Mode      string     `json:"mode"` // until | persistent
+	Until     *time.Time `json:"until,omitempty"`
+	// Shared lets every address allowed to reach ducktainer use it;
+	// otherwise only Client.
+	Shared  bool      `json:"shared,omitempty"`
+	Client  string    `json:"client"`
+	User    string    `json:"user"`
+	Created time.Time `json:"created"`
+}
+
 // ShortcutRef is a container web port with an entry in the start menu.
 type ShortcutRef struct {
 	Endpoint  string `json:"endpoint"`
@@ -175,6 +193,7 @@ type Config struct {
 	Cloudflare    *Cloudflare      `json:"cloudflare,omitempty"`
 	Exposures     []Exposure       `json:"exposures,omitempty"`
 	Shortcuts     *Shortcuts       `json:"shortcuts,omitempty"`
+	Forwards      []Forward        `json:"forwards,omitempty"`
 
 	mu       sync.Mutex
 	path     string
@@ -299,7 +318,7 @@ func (c *Config) decode(data []byte) error {
 		}
 	}
 	c.TokenHash, c.SessionSecret, c.Auth = o.TokenHash, o.SessionSecret, o.Auth
-	c.Cloudflare, c.Exposures, c.Shortcuts = o.Cloudflare, o.Exposures, o.Shortcuts
+	c.Cloudflare, c.Exposures, c.Shortcuts, c.Forwards = o.Cloudflare, o.Exposures, o.Shortcuts, o.Forwards
 	c.Allow, c.Endpoints, c.Registry, c.Templates = o.Allow, o.Endpoints, o.Registry, o.Templates
 	if o.LegacyToken != "" {
 		c.SetToken(o.LegacyToken)
@@ -476,6 +495,7 @@ func (c *Config) clone() *Config {
 		sc = &Shortcuts{All: c.Shortcuts.All, Items: append([]ShortcutRef(nil), c.Shortcuts.Items...)}
 	}
 	return &Config{
+		Forwards:      append([]Forward(nil), c.Forwards...),
 		Shortcuts:     sc,
 		Cloudflare:    cf,
 		Exposures:     xs,
