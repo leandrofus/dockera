@@ -1,5 +1,5 @@
 // Package docker is a small Docker Engine API client. It speaks HTTP directly
-// over a unix socket, TCP(+TLS) to a `dockera expose` proxy, or SSH using
+// over a unix socket, TCP(+TLS) to a `ducktainer expose` proxy, or SSH using
 // `docker system dial-stdio` on the remote host, so nothing has to be
 // installed there besides Docker itself.
 package docker
@@ -11,7 +11,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"dockera/internal/agent"
-	"dockera/internal/config"
+	"ducktainer/internal/agent"
+	"ducktainer/internal/config"
 )
 
 type Client struct {
@@ -319,7 +319,7 @@ func Secure(ctx context.Context, ep config.Endpoint) (config.Endpoint, error) {
 	useTLS := ep.TLS || u.Scheme == "https"
 	if !useTLS {
 		if ip := net.ParseIP(u.Hostname()); u.Hostname() != "localhost" && (ip == nil || !ip.IsLoopback()) {
-			return ep, i18n.Errorf("%s: a remote tcp host needs TLS (the token would travel in clear); `dockera expose` enables it by default", ep.Name)
+			return ep, i18n.Errorf("%s: a remote tcp host needs TLS (the token would travel in clear); `ducktainer expose` enables it by default", ep.Name)
 		}
 		return ep, nil
 	}

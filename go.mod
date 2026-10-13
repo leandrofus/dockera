@@ -1,4 +1,4 @@
-module dockera
+module ducktainer
 
 go 1.26.3
 

@@ -1,11 +1,11 @@
-// Package access restricts who may talk to dockera by source address.
+// Package access restricts who may talk to ducktainer by source address.
 // Entries can be IPs, CIDRs or hostnames (re-resolved periodically, so
 // dynamic DNS works).
 package access
 
 import (
 	"context"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"log"
 	"net"
 	"net/http"

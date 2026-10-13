@@ -12,10 +12,10 @@ import (
 	"sync"
 	"time"
 
-	"dockera/internal/agent"
-	"dockera/internal/auth"
-	"dockera/internal/docker"
-	"dockera/internal/probe"
+	"ducktainer/internal/agent"
+	"ducktainer/internal/auth"
+	"ducktainer/internal/docker"
+	"ducktainer/internal/probe"
 )
 
 // The jump screen: every port of every container, classified as HTTP (one
@@ -23,9 +23,9 @@ import (
 // and its credentials can be read from the environment compose gave it).
 //
 // Compose labels can override the guesswork:
-//   dockera.url=https://app.example.com    URL for the lowest HTTP port
-//   dockera.url.<port>=...                 URL for a given container port
-//   dockera.kind.<port>=http|tcp           force the tab of a port
+//   ducktainer.url=https://app.example.com    URL for the lowest HTTP port
+//   ducktainer.url.<port>=...                 URL for a given container port
+//   ducktainer.kind.<port>=http|tcp           force the tab of a port
 
 type jumpEntry struct {
 	ContainerID string   `json:"container_id"`
@@ -40,7 +40,7 @@ type jumpEntry struct {
 	Proto       string   `json:"proto"`
 	Kind        string   `json:"kind"`             // http | tcp
 	Scheme      string   `json:"scheme,omitempty"` // http | https, for kind=http
-	URL         string   `json:"url,omitempty"`    // from a dockera.url label
+	URL         string   `json:"url,omitempty"`    // from a ducktainer.url label
 	App         string   `json:"app,omitempty"`    // detected service, e.g. PostgreSQL
 	Conn        string   `json:"conn,omitempty"`   // connection string; {host} and {port} are filled by the UI
 	Missing     []string `json:"missing,omitempty"`
@@ -108,7 +108,7 @@ func (s *Server) jump(w http.ResponseWriter, r *http.Request) {
 			classify(&e, ct.Labels, envs[ct.ID], admin)
 			out.Entries = append(out.Entries, e)
 		}
-		if u := ct.Labels["dockera.url"]; u != "" {
+		if u := ct.Labels["ducktainer.url"]; u != "" {
 			best := -1
 			for i := len(out.Entries) - 1; i >= 0 && out.Entries[i].ContainerID == ct.ID; i-- {
 				if x := out.Entries[i]; x.Kind == "http" && x.URL == "" && (best < 0 || x.Port < out.Entries[best].Port) {
@@ -482,7 +482,7 @@ func classify(e *jumpEntry, labels map[string]string, env map[string]string, adm
 	case httpPorts[e.Port] || matchImage(img, httpImages):
 		e.Kind = "http"
 	}
-	if k := labels["dockera.kind."+strconv.Itoa(e.Port)]; k == "http" || k == "tcp" {
+	if k := labels["ducktainer.kind."+strconv.Itoa(e.Port)]; k == "http" || k == "tcp" {
 		e.Kind = k
 	}
 	if e.Kind == "http" {
@@ -490,7 +490,7 @@ func classify(e *jumpEntry, labels map[string]string, env map[string]string, adm
 		if httpsPorts[e.Port] {
 			e.Scheme = "https"
 		}
-		e.URL = labels["dockera.url."+strconv.Itoa(e.Port)]
+		e.URL = labels["ducktainer.url."+strconv.Itoa(e.Port)]
 		return
 	}
 	if found == nil || found.conn == nil || e.Proto != "tcp" {

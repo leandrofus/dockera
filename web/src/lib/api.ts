@@ -1,5 +1,5 @@
 import { getLang } from '../i18n'
-// Thin client for dockera's HTTP API.
+// Thin client for ducktainer's HTTP API.
 
 export class ApiError extends Error {
   status: number
@@ -36,7 +36,7 @@ function request<T>(method: string, path: string, body?: unknown, opts: RequestO
 async function send<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch('/api' + path, {
     method,
-    headers: { 'X-Dockera': '1', 'X-Lang': getLang(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { 'X-Ducktainer': '1', 'X-Lang': getLang(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     credentials: 'same-origin',
   })
@@ -71,7 +71,7 @@ export async function stream(
 ): Promise<void> {
   const res = await fetch('/api' + path, {
     method,
-    headers: { 'X-Dockera': '1', 'X-Lang': getLang(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
+    headers: { 'X-Ducktainer': '1', 'X-Lang': getLang(), ...(body !== undefined ? { 'Content-Type': 'application/json' } : {}) },
     body: body !== undefined ? JSON.stringify(body) : undefined,
     signal,
   })

@@ -1,0 +1,89 @@
+---
+// Every system/architecture command is rendered at build time; the small
+// script only shows the one picked.
+import { installCommands, type Arch, type Release, type System } from '../release'
+import type { Strings } from '../i18n'
+
+interface Props {
+  t: Strings
+  release: Release | null
+}
+const { t, release } = Astro.props
+const systems: { id: System; label: string }[] = [
+  { id: 'dnf', label: 'RHEL · Fedora' },
+  { id: 'apt', label: 'Debian · Ubuntu' },
+  { id: 'linux', label: t.binary },
+  { id: 'darwin', label: 'macOS' },
+  { id: 'windows', label: 'Windows' },
+]
+const arches: { id: Arch; label: string }[] = [
+  { id: 'amd64', label: 'x86-64' },
+  { id: 'arm64', label: 'ARM64' },
+]
+const variants = release
+  ? systems.flatMap((s) => arches.map((a) => ({ sys: s.id, arch: a.id, lines: installCommands(release, s.id, a.id) })))
+  : []
+---
+<div class="wrap install">
+  <div class="panel" data-install>
+    <h2>{t.installTitle}</h2>
+    <p>{t.installSub}</p>
+    {release ? (
+      <>
+        <div class="tabs" role="tablist" aria-label={t.system}>
+          {systems.map((s, i) => (
+            <button type="button" role="tab" data-sys={s.id} aria-selected={i === 0 ? 'true' : 'false'}>{s.label}</button>
+          ))}
+          <label class="arch"><span>{t.arch}</span>
+            <select data-arch>
+              {arches.map((a) => <option value={a.id}>{a.label}</option>)}
+            </select>
+          </label>
+        </div>
+        <div class="cmd">
+          {variants.map((v, i) => (
+            <pre data-sys={v.sys} data-arch={v.arch} data-text={v.lines?.join('\n') ?? ''} hidden={i !== 0}>{v.lines ? v.lines.map((l, j) => <>{j > 0 && '\n'}<span class="p">$ </span>{l}</>) : <span set:html={t.noRelease} />}</pre>
+          ))}
+          <button class="copy" type="button" data-copy data-label={t.copy} data-done={t.copied}>{t.copy}</button>
+        </div>
+        <p class="after" data-after="pkg" set:html={t.afterPkg} />
+        <p class="after" data-after="bin" hidden set:html={t.afterBin} />
+      </>
+    ) : (
+      <p class="after" set:html={t.noRelease} />
+    )}
+  </div>
+</div>
+
+<script>
+  const root = document.querySelector<HTMLElement>('[data-install]')
+  const select = root?.querySelector<HTMLSelectElement>('[data-arch]')
+  if (root && select) {
+    const tabs = [...root.querySelectorAll<HTMLButtonElement>('[role="tab"]')]
+    const ua = navigator.userAgent
+    let sys = /Windows/.test(ua) ? 'windows' : /Macintosh/.test(ua) ? 'darwin' : 'dnf'
+    if (/arm64|aarch64/i.test(ua)) select.value = 'arm64'
+    const show = () => {
+      tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.sys === sys)))
+      root.querySelectorAll<HTMLElement>('pre[data-sys]').forEach((p) => {
+        p.hidden = p.dataset.sys !== sys || p.dataset.arch !== select.value
+      })
+      const pkg = sys === 'dnf' || sys === 'apt'
+      root.querySelector<HTMLElement>('[data-after="pkg"]')!.hidden = !pkg
+      root.querySelector<HTMLElement>('[data-after="bin"]')!.hidden = pkg
+    }
+    tabs.forEach((b) => b.addEventListener('click', () => { sys = b.dataset.sys!; show() }))
+    select.addEventListener('change', show)
+    const copy = root.querySelector<HTMLButtonElement>('[data-copy]')!
+    copy.addEventListener('click', async () => {
+      const text = root.querySelector<HTMLElement>('pre[data-sys]:not([hidden])')?.dataset.text
+      if (!text) return
+      try {
+        await navigator.clipboard.writeText(text)
+        copy.textContent = copy.dataset.done!
+        setTimeout(() => (copy.textContent = copy.dataset.label!), 1500)
+      } catch {}
+    })
+    show()
+  }
+</script>

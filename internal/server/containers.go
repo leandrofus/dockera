@@ -4,7 +4,7 @@ import (
 	"archive/tar"
 	"bufio"
 	"context"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	"strings"
 	"time"
 
-	"dockera/internal/docker"
+	"ducktainer/internal/docker"
 )
 
 func (s *Server) ep(r *http.Request) (*docker.Client, error) {
@@ -312,7 +312,7 @@ func (s *Server) swap(ctx context.Context, c *docker.Client, st *stream, old *in
 	if err := s.ensureImage(ctx, c, st, req.Spec.Image, req.Pull); err != nil {
 		return err
 	}
-	tmpName := newName + "-dockera-new"
+	tmpName := newName + "-ducktainer-new"
 	newID, err := s.create(ctx, c, tmpName, body)
 	if err != nil {
 		return i18n.Errorf("could not create the replacement (the original was not modified): %v", err)
@@ -326,7 +326,7 @@ func (s *Server) swap(ctx context.Context, c *docker.Client, st *stream, old *in
 			return err
 		}
 	}
-	backup := fmt.Sprintf("%s-dockera-old-%d", oldName, time.Now().Unix())
+	backup := fmt.Sprintf("%s-ducktainer-old-%d", oldName, time.Now().Unix())
 	if err := post("/containers/"+old.ID+"/rename", url.Values{"name": {backup}}); err != nil {
 		return err
 	}

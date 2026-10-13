@@ -6,7 +6,7 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"crypto/subtle"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"encoding/base64"
 	"encoding/hex"
 	"errors"
@@ -19,17 +19,17 @@ import (
 // Secrets in config.json (session secret, endpoint tokens, registry
 // passwords) are sealed with AES-256-GCM and the access token is stored as
 // a hash. The key lives apart from the config, first match wins:
-//   - $CREDENTIALS_DIRECTORY/dockera.key (systemd LoadCredential=; the
-//     packaged service loads /etc/dockera/secret.key this way)
-//   - $DOCKERA_KEY_FILE
-//   - /etc/dockera/secret.key for the system instance (/var/lib/dockera)
+//   - $CREDENTIALS_DIRECTORY/ducktainer.key (systemd LoadCredential=; the
+//     packaged service loads /etc/ducktainer/secret.key this way)
+//   - $DUCKTAINER_KEY_FILE
+//   - /etc/ducktainer/secret.key for the system instance (/var/lib/ducktainer)
 //   - secret.key in the data directory (created on first use)
 // A leaked or backed-up config.json alone reveals nothing; whoever can read
 // the key on the host can still decrypt it.
 
 const sealedPrefix = "enc:v1:"
 
-const keyCredential = "dockera.key"
+const keyCredential = "ducktainer.key"
 
 // KeyPath returns where the encryption key is read from.
 func KeyPath() string {
@@ -38,7 +38,7 @@ func KeyPath() string {
 			return filepath.Join(d, keyCredential)
 		}
 	}
-	if p := os.Getenv("DOCKERA_KEY_FILE"); p != "" {
+	if p := os.Getenv("DUCKTAINER_KEY_FILE"); p != "" {
 		return p
 	}
 	if Dir() == SystemDir {
@@ -50,8 +50,8 @@ func KeyPath() string {
 }
 
 const (
-	SystemDir = "/var/lib/dockera"
-	SystemKey = "/etc/dockera/secret.key"
+	SystemDir = "/var/lib/ducktainer"
+	SystemKey = "/etc/ducktainer/secret.key"
 )
 
 // loadKey reads the key, creating a random one in the data directory the
@@ -62,7 +62,7 @@ func loadKey() ([]byte, error) {
 	if errors.Is(err, fs.ErrNotExist) && p == filepath.Join(Dir(), "secret.key") {
 		// a new key would make existing sealed values unreadable
 		if cfg, _ := os.ReadFile(filepath.Join(Dir(), "config.json")); strings.Contains(string(cfg), sealedPrefix) {
-			return nil, i18n.Errorf("encryption key not found (%s): the config has encrypted values; set DOCKERA_KEY_FILE or restore the key", p)
+			return nil, i18n.Errorf("encryption key not found (%s): the config has encrypted values; set DUCKTAINER_KEY_FILE or restore the key", p)
 		}
 		key := make([]byte, 32)
 		if _, err := rand.Read(key); err != nil {

@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: write
+  actions: write # to rebuild the site with the new release
 
 concurrency:
   group: release-${{ github.ref }}
@@ -36,14 +37,19 @@ jobs:
       - name: Checksums
         run: |
           cp dist/packages/* dist/
-          cd dist && sha256sum dockera-*.rpm dockera_*.deb dockera-linux-* dockera-darwin-* dockera-windows-* > SHA256SUMS
+          cd dist && sha256sum ducktainer-*.rpm ducktainer_*.deb ducktainer-linux-* ducktainer-darwin-* ducktainer-windows-* > SHA256SUMS
       - name: Publish
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          files="dist/*.rpm dist/*.deb dist/dockera-linux-* dist/dockera-darwin-* dist/dockera-windows-* dist/SHA256SUMS"
+          files="dist/*.rpm dist/*.deb dist/ducktainer-linux-* dist/ducktainer-darwin-* dist/ducktainer-windows-* dist/SHA256SUMS"
           if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
             gh release upload "$GITHUB_REF_NAME" $files --clobber
           else
-            gh release create "$GITHUB_REF_NAME" $files --title "dockera ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
+            gh release create "$GITHUB_REF_NAME" $files --title "ducktainer ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
           fi
+      - name: Rebuild the site
+        env:
+          GH_TOKEN: ${{ github.token }}
+        # releases made with GITHUB_TOKEN do not trigger other workflows
+        run: gh workflow run pages.yml --ref main

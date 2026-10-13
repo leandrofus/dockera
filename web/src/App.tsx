@@ -130,7 +130,7 @@ function EndpointSwitcher({ ep, collapsed }: { ep: string; collapsed: boolean })
         <>
           <span className="workspace-text">
             <strong>{ep || '…'}</strong>
-            <span className="muted small ellipsis">{cur ? (cur.online ? `Docker ${cur.version}` : tr('offline')) : 'dockera'}</span>
+            <span className="muted small ellipsis">{cur ? (cur.online ? `Docker ${cur.version}` : tr('offline')) : 'ducktainer'}</span>
           </span>
           <ChevronsUpDown size={14} className="muted" />
         </>
@@ -374,7 +374,7 @@ function UserMenu() {
   const items = (): MenuEntry[] => [
     { header: me.method === 'token' ? tr('Token access') : tr('User {0}', me.user) },
     { label: me.role === 'admin' ? tr('Role: administrator') : tr('Role: read-only'), disabled: true },
-    me.version ? { label: `dockera ${me.version}`, disabled: true } : null,
+    me.version ? { label: `ducktainer ${me.version}`, disabled: true } : null,
     'sep',
     { label: tr('Language'), icon: <Languages size={14} />, submenu: LANGUAGES.map((l) => ({ label: l.label, checked: getLang() === l.id, onClick: () => setLang(l.id) })) },
     { label: tr('Sign out'), icon: <LogOut size={14} />, onClick: () => api.post('/logout').then(() => location.reload()) },

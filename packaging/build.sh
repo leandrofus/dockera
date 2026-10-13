@@ -1,9 +1,9 @@
 #!/bin/sh
 # Runs inside the packaging/Dockerfile image with the repo mounted at /src.
-# Builds dockera with PAM (cgo) for each arch and packs rpm + deb.
+# Builds ducktainer with PAM (cgo) for each arch and packs rpm + deb.
 set -eu
 : "${VERSION:=0.1.0}"
-: "${MAINTAINER:=dockera <dockera@localhost>}"
+: "${MAINTAINER:=ducktainer <ducktainer@localhost>}"
 : "${ARCHES:=amd64 arm64}"
 export HOME=/tmp GOCACHE=/tmp/gocache GOPATH=/tmp/gopath GOFLAGS=-buildvcs=false
 mkdir -p dist/build dist/packages
@@ -15,7 +15,7 @@ for arch in $ARCHES; do
 	esac
 	echo "→ go build linux/$arch (cgo + PAM)"
 	CGO_ENABLED=1 GOOS=linux GOARCH=$arch CC=$cc \
-		go build -trimpath -tags pam -ldflags "-s -w -X main.version=$VERSION" -o "dist/build/dockera-linux-$arch" .
+		go build -trimpath -tags pam -ldflags "-s -w -X main.version=$VERSION" -o "dist/build/ducktainer-linux-$arch" .
 	# nfpm doesn't expand variables in content paths: render per arch
 	sed "s|\${ARCH}|$arch|g" packaging/nfpm.yaml > "/tmp/nfpm-$arch.yaml"
 	for fmt in rpm deb; do
@@ -24,7 +24,7 @@ for arch in $ARCHES; do
 done
 ls -l dist/packages
 # guard: the highest glibc symbol version required must stay ≤ 2.34 (RHEL 9)
-for f in dist/build/dockera-linux-*; do
+for f in dist/build/ducktainer-linux-*; do
 	max=$(strings "$f" | grep -o 'GLIBC_2\.[0-9]*' | sort -t. -k2 -n | tail -1)
 	echo "$f requiere $max"
 done

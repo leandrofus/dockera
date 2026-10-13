@@ -66,7 +66,7 @@ function defaultURL(e: JumpEntry, host: string) {
   return `${e.scheme || 'http'}://${a.host}:${a.port}`
 }
 
-// A tunnel listens on this dockera server, so it is reached at the page's host.
+// A tunnel listens on this ducktainer server, so it is reached at the page's host.
 const tunnelAddr = (tn: Tunnel) => ({ host: location.hostname, port: tn.local_port })
 const tunnelURL = (e: JumpEntry, tn: Tunnel) => `${e.scheme || 'http'}://${location.hostname}:${tn.local_port}`
 
@@ -269,7 +269,7 @@ export function Jump({ ep }: { ep: string }) {
                       href={reachable ? url : undefined}
                       target="_blank"
                       rel="noopener noreferrer"
-                      title={viaTunnel && !tn ? t('Opens a tunnel through dockera') : reachable ? url : t('Internal port: not reachable from the browser')}
+                      title={viaTunnel && !tn ? t('Opens a tunnel through ducktainer') : reachable ? url : t('Internal port: not reachable from the browser')}
                       onClick={(ev) => {
                         if (viaTunnel && !tn) {
                           ev.preventDefault()
@@ -337,7 +337,7 @@ export function Jump({ ep }: { ep: string }) {
                               <button className="icon-btn" title={t('Close tunnel :{0}', tn.local_port)} onClick={() => closeTunnel(tn)}><X size={13} /></button>
                             ) : (
                               canTunnel && e.proto === 'tcp' && (
-                                <button className="btn btn-sm btn-ghost" disabled={opening === ekey(e)} title={t('Forward this port through dockera')} onClick={() => openTunnel(e).catch(toast.err)}>
+                                <button className="btn btn-sm btn-ghost" disabled={opening === ekey(e)} title={t('Forward this port through ducktainer')} onClick={() => openTunnel(e).catch(toast.err)}>
                                   {opening === ekey(e) ? <Spinner /> : <ArrowLeftRight size={13} />} {t('Tunnel')}
                                 </button>
                               )

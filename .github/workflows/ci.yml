@@ -30,7 +30,10 @@ jobs:
       - name: Build (static, and with PAM)
         run: |
           sudo apt-get update -qq && sudo apt-get install -y -qq libpam0g-dev
-          CGO_ENABLED=0 go build -trimpath -o /tmp/dockera .
-          CGO_ENABLED=1 go build -trimpath -tags pam -o /tmp/dockera-pam .
+          CGO_ENABLED=0 go build -trimpath -o /tmp/ducktainer .
+          CGO_ENABLED=1 go build -trimpath -tags pam -o /tmp/ducktainer-pam .
       - name: Package scripts
         run: sh -n packaging/scripts/*.sh
+      - name: Site
+        working-directory: site
+        run: npm ci && npm run build

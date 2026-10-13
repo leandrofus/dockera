@@ -1,4 +1,4 @@
-// Package server is dockera's HTTP API and web UI.
+// Package server is ducktainer's HTTP API and web UI.
 package server
 
 import (
@@ -16,13 +16,13 @@ import (
 	"sync"
 	"time"
 
-	"dockera/internal/access"
-	"dockera/internal/auth"
-	"dockera/internal/compose"
-	"dockera/internal/config"
-	"dockera/internal/docker"
-	"dockera/internal/i18n"
-	"dockera/internal/templates"
+	"ducktainer/internal/access"
+	"ducktainer/internal/auth"
+	"ducktainer/internal/compose"
+	"ducktainer/internal/config"
+	"ducktainer/internal/docker"
+	"ducktainer/internal/i18n"
+	"ducktainer/internal/templates"
 )
 
 type Server struct {

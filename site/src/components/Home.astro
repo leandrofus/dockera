@@ -1,0 +1,74 @@
+---
+import Install from './Install.astro'
+import { strings, type Lang } from '../i18n'
+import type { Release } from '../release'
+
+interface Props {
+  lang: Lang
+  release: Release | null
+}
+const { lang, release } = Astro.props
+const t = strings[lang]
+const base = import.meta.env.BASE_URL.replace(/\/$/, '')
+const repo = 'https://github.com/leandrofus/ducktainer'
+---
+<div class="wrap">
+  <nav class="bar" aria-label="Main">
+    <span class="grow"></span>
+    <a href={`${repo}#readme`}>{t.docs}</a>
+    <a href={`${repo}/releases`}>{t.releases}</a>
+    <a href={repo}>GitHub</a>
+    <a class="lang" href={lang === 'en' ? `${base}/es/` : `${base}/`} hreflang={lang === 'en' ? 'es' : 'en'}>{t.otherLang}</a>
+  </nav>
+
+  <header class="hull">
+    <div class="title">
+      <img src={`${base}/ducktainer-mark.svg`} alt="" width="230" height="159" />
+      <h1 class="wordmark">ducktainer</h1>
+    </div>
+    <p class="squeak">{t.squeak}</p>
+    <dl class="plate">
+      <dt>{t.version}</dt><dd>{release?.tag ?? '—'}</dd>
+      <dt>{t.shipsAs}</dt><dd>{t.shipsAsValue}</dd>
+      <dt>{t.runsOn}</dt><dd>RHEL 9+, Fedora, Debian 12+, Ubuntu 22.04+</dd>
+    </dl>
+    <p class="lede">{t.lede}</p>
+  </header>
+</div>
+
+<Install t={t} release={release} />
+
+<main class="wrap">
+  <section>
+    <h2 class="big">{t.featuresTitle}</h2>
+    <dl class="features">
+      {t.features.map(([name, text]) => <div><dt>{name}</dt><dd>{text}</dd></div>)}
+    </dl>
+  </section>
+
+  <section>
+    <h2 class="big">{t.hostsTitle}</h2>
+    <div class="hosts">
+      {t.hosts.map(([name, text, cmd]) => (
+        <div>
+          <h3>{name}</h3>
+          <p>{text}</p>
+          <code>{cmd}</code>
+        </div>
+      ))}
+    </div>
+  </section>
+
+  <section class="secure">
+    <h2 class="big">{t.secureTitle}</h2>
+    <ul>
+      {t.secure.map((s) => <li>{s}</li>)}
+    </ul>
+  </section>
+
+  <footer>
+    <span class="grow">{t.foot}</span>
+    <a href={`${repo}/blob/main/README${lang === 'es' ? '.es' : ''}.md`}>{t.docs}</a>
+    <a href={`${repo}/issues`}>{t.issues}</a>
+  </footer>
+</main>

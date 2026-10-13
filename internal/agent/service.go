@@ -9,14 +9,14 @@ import (
 )
 
 const (
-	envDir  = "/etc/dockera-agent"
+	envDir  = "/etc/ducktainer-agent"
 	envFile = envDir + "/agent.env"
 )
 
 // quote protects a value in a systemd ExecStart line.
 func quote(v string) string { return `"` + strings.ReplaceAll(v, `"`, `\"`) + `"` }
 
-// InstallService configures and enables a systemd unit for dockera-agent on Linux.
+// InstallService configures and enables a systemd unit for ducktainer-agent on Linux.
 func InstallService(cfg Config) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("systemd service installation is only supported on Linux")
@@ -30,7 +30,7 @@ func InstallService(cfg Config) error {
 		return err
 	}
 
-	destBin := "/usr/local/bin/dockera-agent"
+	destBin := "/usr/local/bin/ducktainer-agent"
 	if self != destBin {
 		data, err := os.ReadFile(self)
 		if err != nil {
@@ -48,7 +48,7 @@ func InstallService(cfg Config) error {
 	if err := os.MkdirAll(envDir, 0o700); err != nil {
 		return err
 	}
-	if err := os.WriteFile(envFile, []byte("DOCKERA_AGENT_TOKEN="+cfg.Token+"\n"), 0o600); err != nil {
+	if err := os.WriteFile(envFile, []byte("DUCKTAINER_AGENT_TOKEN="+cfg.Token+"\n"), 0o600); err != nil {
 		return err
 	}
 
@@ -67,8 +67,8 @@ func InstallService(cfg Config) error {
 	execLine := destBin + " " + strings.Join(args, " ")
 
 	unitContent := fmt.Sprintf(`[Unit]
-Description=dockera agent for Docker
-Documentation=https://github.com/leandrofus/dockera
+Description=ducktainer agent for Docker
+Documentation=https://github.com/leandrofus/ducktainer
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
@@ -85,18 +85,18 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 `, envFile, execLine)
 
-	unitPath := "/etc/systemd/system/dockera-agent.service"
+	unitPath := "/etc/systemd/system/ducktainer-agent.service"
 	if err := os.WriteFile(unitPath, []byte(unitContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", unitPath, err)
 	}
 
 	_ = exec.Command("systemctl", "daemon-reload").Run()
-	if err := exec.Command("systemctl", "enable", "--now", "dockera-agent").Run(); err != nil {
-		return fmt.Errorf("failed to enable and start dockera-agent: %w", err)
+	if err := exec.Command("systemctl", "enable", "--now", "ducktainer-agent").Run(); err != nil {
+		return fmt.Errorf("failed to enable and start ducktainer-agent: %w", err)
 	}
 
-	fmt.Println("dockera-agent service installed and started successfully! ✓")
+	fmt.Println("ducktainer-agent service installed and started successfully! ✓")
 	fmt.Printf("Service unit: %s\n", unitPath)
-	fmt.Println("Check status with: systemctl status dockera-agent")
+	fmt.Println("Check status with: systemctl status ducktainer-agent")
 	return nil
 }

@@ -1,11 +1,13 @@
 name: Pages
 
-# The site in site/ reads the latest release from the GitHub API, so it
-# only needs redeploying when it changes.
+# The Astro site in site/ reads the latest release at build time, so it is
+# rebuilt whenever a release is published as well as when it changes.
 on:
   push:
     branches: [main]
-    paths: ['site/**', '.github/workflows/pages.yml']
+    paths: ['site/**', 'assets/brand/**', '.github/workflows/pages.yml']
+  release:
+    types: [published]
   workflow_dispatch:
 
 permissions:
@@ -25,9 +27,19 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v5
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: site/package-lock.json
+      - name: Build
+        working-directory: site
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: npm ci && npm run build
       - uses: actions/configure-pages@v5
       - uses: actions/upload-pages-artifact@v4
         with:
-          path: site
+          path: site/dist
       - id: deployment
         uses: actions/deploy-pages@v4

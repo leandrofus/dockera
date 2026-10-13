@@ -17,9 +17,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
 
-	"dockera/internal/access"
-	"dockera/internal/agent"
-	"dockera/internal/config"
+	"ducktainer/internal/access"
+	"ducktainer/internal/agent"
+	"ducktainer/internal/config"
 )
 
 var agentUpgrader = websocket.Upgrader{
@@ -56,7 +56,7 @@ func (s *Server) agentEndpoint(token string) (config.Endpoint, bool) {
 }
 
 // agentPins returns the server certificate's sha256 fingerprint (hex, for
-// `dockera agent --fingerprint`) and its public key pin (for curl
+// `ducktainer agent --fingerprint`) and its public key pin (for curl
 // --pinnedpubkey); both are empty without TLS.
 func (s *Server) agentPins() (fp, pubkey string) {
 	if len(s.TLSCert) == 0 {
@@ -80,7 +80,7 @@ func validServerURL(v string) bool {
 	return err == nil && (u.Scheme == "http" || u.Scheme == "https") && u.Host != "" && u.RawQuery == "" && u.Fragment == ""
 }
 
-// serveAgentBinary hands the dockera binary to an enrolled node (any agent
+// serveAgentBinary hands the ducktainer binary to an enrolled node (any agent
 // token).
 func (s *Server) serveAgentBinary(w http.ResponseWriter, r *http.Request) {
 	if _, ok := s.agentEndpoint(bearer(r)); !ok {
@@ -94,7 +94,7 @@ func (s *Server) serveAgentBinary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Disposition", `attachment; filename="dockera-agent"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="ducktainer-agent"`)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeFile(w, r, exe)
 }
@@ -128,7 +128,7 @@ func (s *Server) agentInstall(w http.ResponseWriter, r *http.Request) {
 		"tls": fp != "",
 		"install": fmt.Sprintf("%s %s %s | sudo sh", curl, auth,
 			shellQuote(server+"/api/agent/install.sh?server="+url.QueryEscape(server))),
-		"manual": fmt.Sprintf("%s %s %s -o dockera-agent && chmod +x dockera-agent && sudo DOCKERA_AGENT_TOKEN=%s ./dockera-agent agent %s --install-service",
+		"manual": fmt.Sprintf("%s %s %s -o ducktainer-agent && chmod +x ducktainer-agent && sudo DUCKTAINER_AGENT_TOKEN=%s ./ducktainer-agent agent %s --install-service",
 			curl, auth, shellQuote(server+"/api/agent/binary"), shellQuote(ep.Token), flags),
 	})
 }
@@ -158,7 +158,7 @@ func (s *Server) serveAgentInstallScript(w http.ResponseWriter, r *http.Request)
 	}
 
 	script := fmt.Sprintf(`#!/bin/sh
-# dockera agent installer
+# ducktainer agent installer
 set -eu
 
 SERVER=%s
@@ -166,7 +166,7 @@ NAME=%s
 FINGERPRINT=%s
 TOKEN=%s
 
-echo "Installing dockera-agent as $NAME (server: $SERVER)"
+echo "Installing ducktainer-agent as $NAME (server: $SERVER)"
 if [ "$(id -u)" != "0" ]; then
 	echo "run it as root (| sudo sh): the agent is installed as a systemd service" >&2
 	exit 1
@@ -175,10 +175,10 @@ command -v curl >/dev/null 2>&1 || { echo "curl is required" >&2; exit 1; }
 
 # The token never goes on a command line or in the unit: it is kept in a
 # root-only file read by the service.
-install -d -m 0700 /etc/dockera-agent
-(umask 077 && printf 'DOCKERA_AGENT_TOKEN=%%s\n' "$TOKEN" > /etc/dockera-agent/agent.env)
+install -d -m 0700 /etc/ducktainer-agent
+(umask 077 && printf 'DUCKTAINER_AGENT_TOKEN=%%s\n' "$TOKEN" > /etc/ducktainer-agent/agent.env)
 
-BIN=/usr/local/bin/dockera-agent
+BIN=/usr/local/bin/ducktainer-agent
 curl -fsSL %s -H "Authorization: Bearer $TOKEN" "$SERVER/api/agent/binary" -o "$BIN.new"
 chmod 0755 "$BIN.new"
 mv -f "$BIN.new" "$BIN"
@@ -188,20 +188,20 @@ FLAGS="--server $SERVER --name $NAME"
 
 if ! command -v systemctl >/dev/null 2>&1; then
 	echo "systemd not found; start the agent with:"
-	echo "  env \$(cat /etc/dockera-agent/agent.env) $BIN agent $FLAGS"
+	echo "  env \$(cat /etc/ducktainer-agent/agent.env) $BIN agent $FLAGS"
 	exit 0
 fi
 
-cat > /etc/systemd/system/dockera-agent.service <<UNIT
+cat > /etc/systemd/system/ducktainer-agent.service <<UNIT
 [Unit]
-Description=dockera agent
+Description=ducktainer agent
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
 
 [Service]
 Type=simple
-EnvironmentFile=/etc/dockera-agent/agent.env
+EnvironmentFile=/etc/ducktainer-agent/agent.env
 ExecStart=$BIN agent $FLAGS
 Restart=always
 RestartSec=5s
@@ -211,9 +211,9 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 UNIT
 systemctl daemon-reload
-systemctl enable dockera-agent >/dev/null 2>&1
-systemctl restart dockera-agent
-echo "dockera-agent is running: systemctl status dockera-agent"
+systemctl enable ducktainer-agent >/dev/null 2>&1
+systemctl restart ducktainer-agent
+echo "ducktainer-agent is running: systemctl status ducktainer-agent"
 `, shellQuote(serverURL), shellQuote(ep.Name), shellQuote(fp), shellQuote(token), curlTLS)
 
 	w.Header().Set("Content-Type", "text/x-shellscript; charset=utf-8")
@@ -238,7 +238,7 @@ func (s *Server) handleAgentTunnel(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Only the host's own token opens its tunnel. Hosts (and their tokens)
-	// are created from the UI or with `dockera endpoint add NAME agent://`.
+	// are created from the UI or with `ducktainer endpoint add NAME agent://`.
 	ep, authorized := s.agentEndpoint(token)
 	if !authorized || ep.Name != name {
 		log.Printf("[agent] unauthorized connection attempt for %q from %s", name, r.RemoteAddr)

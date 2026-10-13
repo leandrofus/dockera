@@ -1,4 +1,4 @@
-// dockera: agentless Docker administration in a single binary.
+// ducktainer: agentless Docker administration in a single binary.
 package main
 
 import (
@@ -24,58 +24,58 @@ import (
 
 	"golang.org/x/term"
 
-	"dockera/internal/access"
-	"dockera/internal/agent"
-	"dockera/internal/auth"
-	"dockera/internal/cli"
-	"dockera/internal/compose"
-	"dockera/internal/config"
-	"dockera/internal/docker"
-	"dockera/internal/i18n"
-	"dockera/internal/proxy"
-	"dockera/internal/server"
-	"dockera/internal/setup"
-	"dockera/internal/tlsutil"
-	"dockera/packaging"
-	"dockera/web"
+	"ducktainer/internal/access"
+	"ducktainer/internal/agent"
+	"ducktainer/internal/auth"
+	"ducktainer/internal/cli"
+	"ducktainer/internal/compose"
+	"ducktainer/internal/config"
+	"ducktainer/internal/docker"
+	"ducktainer/internal/i18n"
+	"ducktainer/internal/proxy"
+	"ducktainer/internal/server"
+	"ducktainer/internal/setup"
+	"ducktainer/internal/tlsutil"
+	"ducktainer/packaging"
+	"ducktainer/web"
 )
 
 var version = "dev"
 
-const usage = `dockera — lightweight Docker management
+const usage = `ducktainer — lightweight Docker management
 
 Usage:
-  dockera serve      [--listen 127.0.0.1:9900] [--allow IP,CIDR,host] [--tls auto|on|off]
+  ducktainer serve      [--listen 127.0.0.1:9900] [--allow IP,CIDR,host] [--tls auto|on|off]
                      [--expose :2376 [--expose-read-only] [--expose-no-exec]]
                      [--agent-listen :9901] [--tunnel-ports 41000-41099]
                        Web UI + API. With --expose it also publishes the Docker API
-                       (filtered by allowlist + token) for other dockera instances or the docker CLI.
-  dockera expose     [--listen :2376] [--allow ...] [--read-only] [--no-exec]
+                       (filtered by allowlist + token) for other ducktainer instances or the docker CLI.
+  ducktainer expose     [--listen :2376] [--allow ...] [--read-only] [--no-exec]
                        Only publishes the Docker API, protected (no UI).
-  dockera agent      --server https://host:9900 [--name <name>] [--fingerprint <sha256>]
-                     [--socket /var/run/docker.sock] [--insecure]   (token: DOCKERA_AGENT_TOKEN)
+  ducktainer agent      --server https://host:9900 [--name <name>] [--fingerprint <sha256>]
+                     [--socket /var/run/docker.sock] [--insecure]   (token: DUCKTAINER_AGENT_TOKEN)
                      [--install-service]
-                       Connects this node outbound to the central dockera server (ideal behind NAT/firewall).
-  dockera ui                Opens the UI locally (127.0.0.1) and launches the browser.
+                       Connects this node outbound to the central ducktainer server (ideal behind NAT/firewall).
+  ducktainer ui                Opens the UI locally (127.0.0.1) and launches the browser.
 
-  dockera ps    [-e endpoint]                         Containers grouped by stack
-  dockera logs  [-e endpoint] [-f] [-n 200] <container|stack>
-  dockera sh    [-e endpoint] [-u user] <container> [command...]
+  ducktainer ps    [-e endpoint]                         Containers grouped by stack
+  ducktainer logs  [-e endpoint] [-f] [-n 200] <container|stack>
+  ducktainer sh    [-e endpoint] [-u user] <container> [command...]
                                                       Interactive shell (picks bash/ash/sh)
 
-  dockera auth show | set … | test <user>             Sign-in with system users (PAM) and roles by group
-  dockera token [--rotate]                            Show/rotate the access token (emergency/API)
-  dockera allow ls | add <IP|CIDR|host>... | rm <entry>...
-  dockera endpoint ls | add <name> <url> [--token T] [--tls] [--fingerprint F] [--key file] | rm <name>
+  ducktainer auth show | set … | test <user>             Sign-in with system users (PAM) and roles by group
+  ducktainer token [--rotate]                            Show/rotate the access token (emergency/API)
+  ducktainer allow ls | add <IP|CIDR|host>... | rm <entry>...
+  ducktainer endpoint ls | add <name> <url> [--token T] [--tls] [--fingerprint F] [--key file] | rm <name>
                        url: unix:///var/run/docker.sock · ssh://user@host[:port] · tcp://host:2376 · agent://name
-  dockera registry ls | add <name> <server> <user> [--hosts h1,h2] (password on stdin) | rm <name>
-  dockera docker-env <endpoint>                       Variables to use the docker CLI against an endpoint
-  dockera install-service [serve flags]               Install a systemd service (root)
-  dockera setup [--socket PATH] [--dry-run]           Adapt the service to the Docker installation (group,
+  ducktainer registry ls | add <name> <server> <user> [--hosts h1,h2] (password on stdin) | rm <name>
+  ducktainer docker-env <endpoint>                       Variables to use the docker CLI against an endpoint
+  ducktainer install-service [serve flags]               Install a systemd service (root)
+  ducktainer setup [--socket PATH] [--dry-run]           Adapt the service to the Docker installation (group,
                                                       rootless or root) based on the detected socket
-  dockera version
+  ducktainer version
 
-Data and configuration: %s  (change with DOCKERA_HOME)
+Data and configuration: %s  (change with DUCKTAINER_HOME)
 `
 
 func main() {
@@ -133,7 +133,7 @@ func main() {
 	case "auth":
 		err = cmdAuth(args)
 	case "version", "--version", "-v":
-		fmt.Println("dockera", version)
+		fmt.Println("ducktainer", version)
 	case "help", "-h", "--help":
 		i18n.Printf(usage, config.Dir())
 	default:
@@ -269,7 +269,7 @@ func cmdServe(args []string, openBrowser bool) error {
 		scheme = "https"
 	}
 	uiURL := fmt.Sprintf("%s://%s", scheme, displayAddr(*addr))
-	fmt.Printf("\n  dockera %s\n\n", version)
+	fmt.Printf("\n  ducktainer %s\n\n", version)
 	fmt.Printf("  UI         %s\n", uiURL)
 	snap := cfg.Snapshot()
 	if snap.Auth.PAM {
@@ -370,8 +370,8 @@ func waitSignal(errc chan error) error {
 
 func cmdAgent(args []string) error {
 	fs := flag.NewFlagSet("agent", flag.ExitOnError)
-	serverURL := fs.String("server", "", i18n.Sprintf("dockera server URL (e.g. https://dockera.example.com:9900)"))
-	token := fs.String("token", "", i18n.Sprintf("the host's agent token (or DOCKERA_AGENT_TOKEN)"))
+	serverURL := fs.String("server", "", i18n.Sprintf("ducktainer server URL (e.g. https://ducktainer.example.com:9900)"))
+	token := fs.String("token", "", i18n.Sprintf("the host's agent token (or DUCKTAINER_AGENT_TOKEN)"))
 	name := fs.String("name", "", i18n.Sprintf("node name (defaults to hostname)"))
 	socket := fs.String("socket", "", i18n.Sprintf("local Docker socket path (default /var/run/docker.sock)"))
 	insecure := fs.Bool("insecure", false, i18n.Sprintf("skip TLS certificate verification (useful for self-signed certificates)"))
@@ -380,7 +380,7 @@ func cmdAgent(args []string) error {
 	fs.Parse(args)
 	if *token == "" {
 		// preferred: keeps the token out of `ps` and of the unit file
-		*token = os.Getenv("DOCKERA_AGENT_TOKEN")
+		*token = os.Getenv("DUCKTAINER_AGENT_TOKEN")
 	}
 
 	cfg := agent.Config{
@@ -446,7 +446,7 @@ func cmdExpose(args []string) error {
 		fmt.Printf("  TLS sha256 %s\n", fp)
 		tlsFlag = " --tls --fingerprint " + fp
 	}
-	i18n.Printf("\n  From another dockera:\n    dockera endpoint add %s tcp://%s --token %s%s\n\n", hostname(), displayAddr(*addr), shownToken(cfg), tlsFlag)
+	i18n.Printf("\n  From another ducktainer:\n    ducktainer endpoint add %s tcp://%s --token %s%s\n\n", hostname(), displayAddr(*addr), shownToken(cfg), tlsFlag)
 	errc := make(chan error, 1)
 	go func() { errc <- (&http.Server{Handler: h, ReadHeaderTimeout: 15 * time.Second}).Serve(ln) }()
 	return waitSignal(errc)
@@ -474,7 +474,7 @@ func withClient(name string, args []string, fn func(ctx context.Context, c *dock
 	}
 	e, ok := cfg.Endpoint(*ep)
 	if !ok {
-		return i18n.Errorf("unknown endpoint %q (see `dockera endpoint ls`)", *ep)
+		return i18n.Errorf("unknown endpoint %q (see `ducktainer endpoint ls`)", *ep)
 	}
 	c, err := docker.New(e)
 	if err != nil {
@@ -490,7 +490,7 @@ func cmdLogs(args []string) error {
 	var tail string
 	return withClient("logs", args, func(ctx context.Context, c *docker.Client, rest []string) error {
 		if len(rest) != 1 {
-			return i18n.Errorf("usage: dockera logs [-f] [-n 200] <container|stack>")
+			return i18n.Errorf("usage: ducktainer logs [-f] [-n 200] <container|stack>")
 		}
 		return cli.Logs(ctx, c, rest[0], follow, tail)
 	}, func(fs *flag.FlagSet) {
@@ -503,7 +503,7 @@ func cmdShell(args []string) error {
 	var user string
 	return withClient("sh", args, func(ctx context.Context, c *docker.Client, rest []string) error {
 		if len(rest) < 1 {
-			return i18n.Errorf("usage: dockera sh [-u user] <container> [command...]")
+			return i18n.Errorf("usage: ducktainer sh [-u user] <container> [command...]")
 		}
 		// the shell must not be killed by ctrl-c: it belongs to the remote tty
 		return cli.Shell(context.Background(), c, rest[0], user, rest[1:])
@@ -528,7 +528,7 @@ func cmdToken(args []string) error {
 		fmt.Println(t)
 		return nil
 	}
-	return i18n.Errorf("the token is stored hashed and cannot be shown again: `dockera token --rotate` creates and prints a new one")
+	return i18n.Errorf("the token is stored hashed and cannot be shown again: `ducktainer token --rotate` creates and prints a new one")
 }
 
 // shownToken is the access token when this process created it, else a
@@ -544,7 +544,7 @@ func tokenLine(cfg *config.Config) string {
 	if t := cfg.FreshToken(); t != "" {
 		return t + i18n.Sprintf("  (shown once: only its hash is stored)")
 	}
-	return i18n.Sprintf("(stored hashed; `dockera token --rotate` prints a new one)")
+	return i18n.Sprintf("(stored hashed; `ducktainer token --rotate` prints a new one)")
 }
 
 func cmdAllow(args []string) error {
@@ -577,7 +577,7 @@ func cmdAllow(args []string) error {
 			return nil
 		})
 	}
-	return i18n.Errorf("usage: dockera allow ls | add ... | rm ...")
+	return i18n.Errorf("usage: ducktainer allow ls | add ... | rm ...")
 }
 
 func appendUnique(s []string, v ...string) []string {
@@ -622,12 +622,12 @@ func cmdEndpoint(args []string) error {
 	switch args[0] {
 	case "add":
 		fs := flag.NewFlagSet("endpoint add", flag.ExitOnError)
-		token := fs.String("token", "", i18n.Sprintf("token of the remote `dockera expose`"))
+		token := fs.String("token", "", i18n.Sprintf("token of the remote `ducktainer expose`"))
 		useTLS := fs.Bool("tls", false, i18n.Sprintf("use TLS"))
 		fp := fs.String("fingerprint", "", i18n.Sprintf("sha256 fingerprint of the remote certificate"))
 		key := fs.String("key", "", i18n.Sprintf("SSH key"))
 		if len(args) < 3 {
-			return i18n.Errorf("usage: dockera endpoint add <name> <url> [--token T] [--tls] [--fingerprint F] [--key file]")
+			return i18n.Errorf("usage: ducktainer endpoint add <name> <url> [--token T] [--tls] [--fingerprint F] [--key file]")
 		}
 		fs.Parse(args[3:])
 		ep := config.Endpoint{Name: args[1], URL: args[2], Token: *token, TLS: *useTLS || *fp != "", Fingerprint: *fp, SSHKey: *key}
@@ -669,7 +669,7 @@ func cmdEndpoint(args []string) error {
 		})
 	case "rm":
 		if len(args) < 2 {
-			return i18n.Errorf("usage: dockera endpoint rm <name>")
+			return i18n.Errorf("usage: ducktainer endpoint rm <name>")
 		}
 		return cfg.Update(func(c *config.Config) error {
 			out := c.Endpoints[:0]
@@ -682,7 +682,7 @@ func cmdEndpoint(args []string) error {
 			return nil
 		})
 	}
-	return i18n.Errorf("usage: dockera endpoint ls | add | rm")
+	return i18n.Errorf("usage: ducktainer endpoint ls | add | rm")
 }
 
 func cmdRegistry(args []string) error {
@@ -701,7 +701,7 @@ func cmdRegistry(args []string) error {
 	switch args[0] {
 	case "add":
 		if len(args) < 4 {
-			return i18n.Errorf("usage: echo $PASS | dockera registry add <name> <server> <user> [--hosts h1,h2]")
+			return i18n.Errorf("usage: echo $PASS | ducktainer registry add <name> <server> <user> [--hosts h1,h2]")
 		}
 		fs := flag.NewFlagSet("registry add", flag.ExitOnError)
 		var hosts listFlag
@@ -722,7 +722,7 @@ func cmdRegistry(args []string) error {
 		})
 	case "rm":
 		if len(args) < 2 {
-			return i18n.Errorf("usage: dockera registry rm <name>")
+			return i18n.Errorf("usage: ducktainer registry rm <name>")
 		}
 		return cfg.Update(func(c *config.Config) error {
 			out := c.Registry[:0]
@@ -735,13 +735,13 @@ func cmdRegistry(args []string) error {
 			return nil
 		})
 	}
-	return i18n.Errorf("usage: dockera registry ls | add | rm")
+	return i18n.Errorf("usage: ducktainer registry ls | add | rm")
 }
 
 // cmdDockerEnv prints how to point the docker CLI at an endpoint.
 func cmdDockerEnv(args []string) error {
 	if len(args) != 1 {
-		return i18n.Errorf("usage: dockera docker-env <endpoint>")
+		return i18n.Errorf("usage: ducktainer docker-env <endpoint>")
 	}
 	cfg, err := config.Load()
 	if err != nil {
@@ -772,7 +772,7 @@ func cmdDockerEnv(args []string) error {
 			fmt.Println("export " + v)
 		}
 	}
-	fmt.Println("# eval \"$(dockera docker-env " + e.Name + ")\"")
+	fmt.Println("# eval \"$(ducktainer docker-env " + e.Name + ")\"")
 	return nil
 }
 
@@ -781,13 +781,13 @@ func cmdInstall(args []string) error {
 		return i18n.Errorf("install-service is only available on Linux (systemd)")
 	}
 	if os.Geteuid() != 0 {
-		return i18n.Errorf("run as root: sudo dockera install-service [serve flags]")
+		return i18n.Errorf("run as root: sudo ducktainer install-service [serve flags]")
 	}
 	self, err := os.Executable()
 	if err != nil {
 		return err
 	}
-	bin := "/usr/local/bin/dockera"
+	bin := "/usr/local/bin/ducktainer"
 	if self != bin {
 		data, err := os.ReadFile(self)
 		if err != nil {
@@ -810,26 +810,26 @@ func cmdInstall(args []string) error {
 		if err != nil {
 			return err
 		}
-		data = []byte(strings.ReplaceAll(string(data), "/usr/bin/dockera", bin))
+		data = []byte(strings.ReplaceAll(string(data), "/usr/bin/ducktainer", bin))
 		os.MkdirAll(filepath.Dir(dst), 0o755)
 		return os.WriteFile(dst, data, mode)
 	}
-	for _, u := range []string{"dockera.service", "dockera-pam.socket", "dockera-pam@.service"} {
+	for _, u := range []string{"ducktainer.service", "ducktainer-pam.socket", "ducktainer-pam@.service"} {
 		if err := write("systemd/"+u, "/etc/systemd/system/"+u, 0o644, false); err != nil {
 			return err
 		}
 	}
-	pamSrc := "pam/dockera.debian"
+	pamSrc := "pam/ducktainer.debian"
 	if _, err := os.Stat("/etc/pam.d/password-auth"); err == nil {
-		pamSrc = "pam/dockera.redhat"
+		pamSrc = "pam/ducktainer.redhat"
 	}
-	if err := write(pamSrc, "/etc/pam.d/dockera", 0o644, true); err != nil {
+	if err := write(pamSrc, "/etc/pam.d/ducktainer", 0o644, true); err != nil {
 		return err
 	}
-	if _, err := os.Stat("/etc/dockera/dockera.env"); os.IsNotExist(err) {
-		os.MkdirAll("/etc/dockera", 0o755)
-		env := fmt.Sprintf("# `dockera serve` options\nDOCKERA_OPTS=%q\n", strings.Join(args, " "))
-		if err := os.WriteFile("/etc/dockera/dockera.env", []byte(env), 0o644); err != nil {
+	if _, err := os.Stat("/etc/ducktainer/ducktainer.env"); os.IsNotExist(err) {
+		os.MkdirAll("/etc/ducktainer", 0o755)
+		env := fmt.Sprintf("# `ducktainer serve` options\nDUCKTAINER_OPTS=%q\n", strings.Join(args, " "))
+		if err := os.WriteFile("/etc/ducktainer/ducktainer.env", []byte(env), 0o644); err != nil {
 			return err
 		}
 	}
@@ -838,7 +838,7 @@ func cmdInstall(args []string) error {
 		return err
 	}
 	cmd := exec.Command("/bin/sh", "-s", "1")
-	cmd.Stdin = strings.NewReader(strings.ReplaceAll(string(script), "/usr/bin/dockera", bin))
+	cmd.Stdin = strings.NewReader(strings.ReplaceAll(string(script), "/usr/bin/ducktainer", bin))
 	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
 	if err := cmd.Run(); err != nil {
 		return i18n.Errorf("post-install: %v", err)
@@ -851,7 +851,7 @@ func cmdInstall(args []string) error {
 
 func cmdPAMHelper(args []string) error {
 	fs := flag.NewFlagSet("pam-helper", flag.ExitOnError)
-	service := fs.String("service", "dockera", i18n.Sprintf("PAM service"))
+	service := fs.String("service", "ducktainer", i18n.Sprintf("PAM service"))
 	fs.Parse(args)
 	return auth.ServeHelper(*service, os.Stdin, os.Stdout)
 }
@@ -929,7 +929,7 @@ func cmdAuth(args []string) error {
 		return cmdAuth([]string{"show"})
 	case "test":
 		if len(args) != 1 {
-			return i18n.Errorf("usage: dockera auth test <user>")
+			return i18n.Errorf("usage: ducktainer auth test <user>")
 		}
 		i18n.Fprintf(os.Stderr, "password for %s: ", args[0])
 		var pass []byte
@@ -955,17 +955,17 @@ func cmdAuth(args []string) error {
 		if err != nil {
 			return err
 		}
-		i18n.Printf("dockera role: %s\n", role)
+		i18n.Printf("ducktainer role: %s\n", role)
 		return nil
 	}
-	return i18n.Errorf("usage: dockera auth show | set [--pam on|off] [--token-login on|off] [--admin-groups a,b] [--viewer-groups c] … | test <user>")
+	return i18n.Errorf("usage: ducktainer auth show | set [--pam on|off] [--token-login on|off] [--admin-groups a,b] [--viewer-groups c] … | test <user>")
 }
 
 func cmdSetup(args []string) error {
 	fs := flag.NewFlagSet("setup", flag.ExitOnError)
 	socket := fs.String("socket", "", i18n.Sprintf("daemon socket (detected by default)"))
 	dry := fs.Bool("dry-run", false, i18n.Sprintf("only show what would be done"))
-	noRestart := fs.Bool("no-restart", false, i18n.Sprintf("do not restart dockera.service"))
+	noRestart := fs.Bool("no-restart", false, i18n.Sprintf("do not restart ducktainer.service"))
 	quiet := fs.Bool("quiet", false, i18n.Sprintf("less output"))
 	fs.Parse(args)
 	plan := setup.Detect(*socket)

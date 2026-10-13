@@ -1,12 +1,12 @@
 [Unit]
-Description=dockera - PAM credential check
+Description=ducktainer - PAM credential check
 CollectMode=inactive-or-failed
 
 [Service]
 Type=simple
 # Root only for the duration of one login attempt: reads one request from
-# the socket, runs the PAM "dockera" stack, answers and exits.
-ExecStart=/usr/bin/dockera pam-helper --service dockera
+# the socket, runs the PAM "ducktainer" stack, answers and exits.
+ExecStart=/usr/bin/ducktainer pam-helper --service ducktainer
 StandardInput=socket
 StandardOutput=socket
 StandardError=journal

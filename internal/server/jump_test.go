@@ -29,7 +29,7 @@ func TestClassify(t *testing.T) {
 		{image: "mongo-express", port: 8081, proto: "tcp", kind: "http"},
 		{image: "ghcr.io/acme/api:1", port: 8443, proto: "tcp", kind: "http"},
 		{image: "ghcr.io/acme/api:1", port: 7000, proto: "tcp", kind: "tcp"},
-		{image: "ghcr.io/acme/api:1", port: 7000, proto: "tcp", labels: map[string]string{"dockera.kind.7000": "http"}, kind: "http"},
+		{image: "ghcr.io/acme/api:1", port: 7000, proto: "tcp", labels: map[string]string{"ducktainer.kind.7000": "http"}, kind: "http"},
 		{image: "coredns/coredns", port: 53, proto: "udp", kind: "tcp"},
 		{image: "my/db:1", port: 5432, proto: "tcp", admin: true, kind: "tcp", app: "PostgreSQL", conn: "postgresql://postgres:<password>@{host}:{port}/postgres"},
 	}

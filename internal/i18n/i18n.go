@@ -46,7 +46,7 @@ func Pick(explicit, acceptLanguage string) string {
 
 // Env returns the CLI language from LC_ALL / LC_MESSAGES / LANG.
 func Env() string {
-	for _, k := range []string{"DOCKERA_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
+	for _, k := range []string{"DUCKTAINER_LANG", "LC_ALL", "LC_MESSAGES", "LANG"} {
 		if v := os.Getenv(k); v != "" && v != "C" && v != "POSIX" {
 			return normalize(v)
 		}

@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -15,8 +15,8 @@ import (
 	"strings"
 	"sync"
 
-	"dockera/internal/compose"
-	"dockera/internal/docker"
+	"ducktainer/internal/compose"
+	"ducktainer/internal/docker"
 )
 
 const (
@@ -53,13 +53,13 @@ type stackInfo struct {
 	Writable bool `json:"writable"`
 	// Reason explains why the compose files can't be edited from here.
 	Reason string `json:"reason,omitempty"`
-	// Location: a dockera stack kept in its own directory (not the store).
+	// Location: a ducktainer stack kept in its own directory (not the store).
 	Location *compose.Location `json:"location,omitempty"`
 	// Node: the files live on the remote node (compose runs there).
 	Node bool `json:"node,omitempty"`
 }
 
-// stored: the compose file is kept in dockera's store.
+// stored: the compose file is kept in ducktainer's store.
 func (st *stackInfo) stored() bool { return st.Managed && st.Location == nil }
 
 type rawContainer struct {
@@ -549,7 +549,7 @@ func (s *Server) deleteStack(w http.ResponseWriter, r *http.Request) {
 				return err
 			}
 			if info.Location != nil {
-				st.Log("dockera no longer tracks the stack; its files in %s were kept", info.Location.Dir)
+				st.Log("ducktainer no longer tracks the stack; its files in %s were kept", info.Location.Dir)
 			} else {
 				st.Log("Stack files removed")
 			}
@@ -558,7 +558,7 @@ func (s *Server) deleteStack(w http.ResponseWriter, r *http.Request) {
 	}())
 }
 
-// adoptStack copies an external project's files into dockera's store so it
+// adoptStack copies an external project's files into ducktainer's store so it
 // can be managed (and edited) from here.
 func (s *Server) adoptStack(w http.ResponseWriter, r *http.Request) {
 	ep := r.PathValue("ep")
@@ -568,7 +568,7 @@ func (s *Server) adoptStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if info.Managed {
-		writeErr(w, badRequest("the stack is already managed by dockera"))
+		writeErr(w, badRequest("the stack is already managed by ducktainer"))
 		return
 	}
 	var body struct {
@@ -648,7 +648,7 @@ func (s *Server) stackLogs(w http.ResponseWriter, r *http.Request) {
 				label = ct.Name
 			}
 			if err := streamLogs(r.Context(), c, ct.ID, in.Config.Tty, q, label, st); err != nil && r.Context().Err() == nil {
-				b, _ := json.Marshal(logLine{S: "err", M: "[dockera] " + err.Error(), C: label})
+				b, _ := json.Marshal(logLine{S: "err", M: "[ducktainer] " + err.Error(), C: label})
 				st.Raw(b)
 			}
 		}()
@@ -699,7 +699,7 @@ func (s *Server) stackMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if info.Managed {
-		writeErr(w, badRequest("dockera stacks already use a single file"))
+		writeErr(w, badRequest("ducktainer stacks already use a single file"))
 		return
 	}
 	if !info.Writable {

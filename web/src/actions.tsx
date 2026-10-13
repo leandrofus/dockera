@@ -195,7 +195,7 @@ export function containerActions(ep: string, c: Container, opts: { preview?: () 
           .map(([k, n]) => ({ label: `IP (${k})`, hint: n.IPAddress, onClick: () => copy(n.IPAddress) })),
         'sep',
         { label: tr('docker exec command'), onClick: () => copy(`docker exec -it ${name} sh`) },
-        { label: tr('dockera sh command'), onClick: () => copy(`dockera sh -e ${ep} ${name}`) },
+        { label: tr('ducktainer sh command'), onClick: () => copy(`ducktainer sh -e ${ep} ${name}`) },
         { label: tr('docker logs command'), onClick: () => copy(`docker logs -f --tail 200 ${name}`) },
       ],
     },
@@ -287,11 +287,11 @@ export function stackActions(ep: string, s: Stack): MenuEntry[] {
       ],
     },
     !s.managed && {
-      label: tr('Adopt into dockera…'),
+      label: tr('Adopt into ducktainer…'),
       icon: <PackagePlus size={I} />,
       onClick: async () => {
         if (!s.editable) return go(ep, 'stacks', s.name, 'compose')
-        if (!(await confirm({ title: tr('Adopt {0}', s.name), body: (multi ? tr('The compose (merging its files) will be copied to the dockera store. Note: relative paths (./data) will then resolve from the dockera directory.') : tr('dockera will track the project in place ({0}): its files stay where they are and relative paths keep working.', s.working_dir || '')), confirm: tr('Adopt') }))) return
+        if (!(await confirm({ title: tr('Adopt {0}', s.name), body: (multi ? tr('The compose (merging its files) will be copied to the ducktainer store. Note: relative paths (./data) will then resolve from the ducktainer directory.') : tr('ducktainer will track the project in place ({0}): its files stay where they are and relative paths keep working.', s.working_dir || '')), confirm: tr('Adopt') }))) return
         act(api.post(`/e/${enc(ep)}/stacks/${enc(s.name)}/adopt`, {}), tr('{0} adopted', s.name))
       },
     },
@@ -312,7 +312,7 @@ export function stackActions(ep: string, s: Stack): MenuEntry[] {
       icon: <Trash2 size={I} />,
       danger: true,
       onClick: async () => {
-        const ok = await confirm({ title: tr('Delete {0}', s.name), body: s.managed && !s.location ? tr('The containers will be taken down and the stack files stored in dockera deleted.') : tr('The containers will be taken down (the project files are not touched).'), danger: true, confirm: tr('Delete'), check: tr('Also delete the volumes') })
+        const ok = await confirm({ title: tr('Delete {0}', s.name), body: s.managed && !s.location ? tr('The containers will be taken down and the stack files stored in ducktainer deleted.') : tr('The containers will be taken down (the project files are not touched).'), danger: true, confirm: tr('Delete'), check: tr('Also delete the volumes') })
         if (!ok) return
         runJob(tr('Delete {0}', s.name), 'DELETE', `/e/${enc(ep)}/stacks/${enc(s.name)}?volumes=${ok.checked ? 1 : 0}`)
           .then(() => go(ep, 'stacks'))
@@ -327,7 +327,7 @@ export async function mergeStack(ep: string, s: Stack) {
   const names = (s.config_files || []).map((f) => f.split('/').pop())
   const ok = await confirm({
     title: tr('Merge files of {0}', s.name),
-    body: tr('{0} will be merged into {1} (with .dockera-bak copies of the originals). Variables are kept; comments and formatting are lost. Containers are not recreated.', names.join(' + '), names[0]),
+    body: tr('{0} will be merged into {1} (with .ducktainer-bak copies of the originals). Variables are kept; comments and formatting are lost. Containers are not recreated.', names.join(' + '), names[0]),
     confirm: tr('Merge'),
   })
   if (ok) act(api.post(`/e/${enc(ep)}/stacks/${enc(s.name)}/merge`), tr('{0}: files merged', s.name))

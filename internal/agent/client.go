@@ -24,22 +24,22 @@ import (
 
 // Config configures the outbound agent connection.
 type Config struct {
-	Server      string // e.g. "https://dockera.example.com:9900"
+	Server      string // e.g. "https://ducktainer.example.com:9900"
 	Token       string // authorization token
-	Name        string // node name in dockera
+	Name        string // node name in ducktainer
 	Socket      string // path to local docker socket (default "/var/run/docker.sock")
 	Insecure    bool   // skip TLS certificate validation
 	Fingerprint string // expected sha256 fingerprint of the server certificate
 }
 
 // Run runs the standalone agent, maintaining a persistent outbound tunnel to
-// the central dockera server and proxying requests to the local Docker socket.
+// the central ducktainer server and proxying requests to the local Docker socket.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Server == "" {
 		return errors.New("server address is required (--server)")
 	}
 	if cfg.Token == "" {
-		return errors.New("agent token is required (DOCKERA_AGENT_TOKEN or --token)")
+		return errors.New("agent token is required (DUCKTAINER_AGENT_TOKEN or --token)")
 	}
 	if cfg.Name == "" {
 		h, err := os.Hostname()

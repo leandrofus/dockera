@@ -6,7 +6,7 @@ import (
 	"crypto/hmac"
 	"crypto/sha256"
 	"crypto/subtle"
-	"dockera/internal/i18n"
+	"ducktainer/internal/i18n"
 	"encoding/base64"
 	"encoding/json"
 	"errors"
@@ -20,12 +20,12 @@ import (
 	"sync"
 	"time"
 
-	"dockera/internal/access"
-	"dockera/internal/auth"
-	"dockera/internal/config"
+	"ducktainer/internal/access"
+	"ducktainer/internal/auth"
+	"ducktainer/internal/config"
 )
 
-const cookieName = "dockera_session"
+const cookieName = "ducktainer_session"
 
 // Session is the signed content of the login cookie.
 type Session struct {
@@ -132,8 +132,8 @@ func (s *Server) session(r *http.Request) (*Session, error) {
 	}
 	// Cookie-authenticated mutations must carry a header cross-site forms
 	// can't set (CSRF). WebSockets are protected by the Origin check.
-	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("X-Dockera") != "1" {
-		return nil, i18n.Errorf("missing X-Dockera header")
+	if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Header.Get("X-Ducktainer") != "1" {
+		return nil, i18n.Errorf("missing X-Ducktainer header")
 	}
 	switch sess.Method {
 	case "token":

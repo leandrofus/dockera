@@ -18,8 +18,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
 
-	"dockera/internal/agent"
-	"dockera/internal/probe"
+	"ducktainer/internal/agent"
+	"ducktainer/internal/probe"
 )
 
 func TestHubBasics(t *testing.T) {
@@ -40,7 +40,7 @@ func TestHubBasics(t *testing.T) {
 
 func TestAgentTunnelAndDial(t *testing.T) {
 	// 1. Mock local Docker daemon listening on a temporary unix socket
-	tmpDir, err := os.MkdirTemp("", "dockera-test-*")
+	tmpDir, err := os.MkdirTemp("", "ducktainer-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
