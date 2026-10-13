@@ -1,7 +1,13 @@
 ---
+import { getImage } from 'astro:assets'
+import Header from './Header.astro'
+import Footer from './Footer.astro'
 import Install from './Install.astro'
+import Icon from './Icon.astro'
 import { strings, type Lang } from '../i18n'
 import type { Release } from '../release'
+import { REPO_URL, docsPath, homePath } from '../paths'
+import logoDark from '../assets/logo-dark.png'
 
 interface Props {
   lang: Lang
@@ -9,66 +15,83 @@ interface Props {
 }
 const { lang, release } = Astro.props
 const t = strings[lang]
-const base = import.meta.env.BASE_URL.replace(/\/$/, '')
-const repo = 'https://github.com/leandrofus/ducktainer'
+// the hero is always dark, so it always shows the logo with light lettering
+const logo = await getImage({ src: logoDark, format: 'webp', quality: 92 })
+const featureIcons = ['box', 'layers', 'disk', 'grid', 'users', 'history']
+const hostIcons = ['key', 'outbound', 'shield']
 ---
-<div class="wrap">
-  <nav class="bar" aria-label="Main">
-    <span class="grow"></span>
-    <a href={`${repo}#readme`}>{t.docs}</a>
-    <a href={`${repo}/releases`}>{t.releases}</a>
-    <a href={repo}>GitHub</a>
-    <a class="lang" href={lang === 'en' ? `${base}/es/` : `${base}/`} hreflang={lang === 'en' ? 'es' : 'en'}>{t.otherLang}</a>
-  </nav>
-
-  <header class="hull">
-    <div class="title">
-      <img src={`${base}/ducktainer-mark.svg`} alt="" width="230" height="159" />
-      <h1 class="wordmark">ducktainer</h1>
+<div class="hero">
+  <Header lang={lang} otherHref={homePath(lang === 'en' ? 'es' : 'en')} onHero />
+  <div class="wrap hero-in">
+    <div class="hero-text">
+      {release && (
+        <a class="pill" href={`${REPO_URL}/releases/tag/${release.tag}`}>
+          <span class="dot"></span>{t.latest} <strong>{release.tag}</strong>
+        </a>
+      )}
+      <h1>{t.headline}</h1>
+      <p class="lede">{t.lede}</p>
+      <div class="ctas">
+        <a class="btn primary" href="#install">{t.ctaInstall}</a>
+        <a class="btn ghost" href={docsPath(lang)}>{t.docs}</a>
+      </div>
+      <p class="runs">{t.shipsAsValue} · RHEL 9+ · Fedora · Debian 12+ · Ubuntu 22.04+ · macOS · Windows</p>
     </div>
-    <p class="squeak">{t.squeak}</p>
-    <dl class="plate">
-      <dt>{t.version}</dt><dd>{release?.tag ?? '—'}</dd>
-      <dt>{t.shipsAs}</dt><dd>{t.shipsAsValue}</dd>
-      <dt>{t.runsOn}</dt><dd>RHEL 9+, Fedora, Debian 12+, Ubuntu 22.04+</dd>
-    </dl>
-    <p class="lede">{t.lede}</p>
-  </header>
+    <div class="hero-art">
+      <img src={logo.src} width={logo.attributes.width ?? 366} height={logo.attributes.height ?? 270} alt={`ducktainer — ${t.squeak}`} fetchpriority="high" />
+    </div>
+  </div>
+  <svg class="waves" viewBox="0 0 1440 120" preserveAspectRatio="none" aria-hidden="true">
+    <path class="w1" d="M0 58 C 180 18 360 18 540 52 S 900 100 1080 60 S 1350 22 1440 44 V120 H0 Z" />
+    <path class="w2" d="M0 80 C 240 46 420 108 720 80 S 1200 50 1440 76 V120 H0 Z" />
+  </svg>
 </div>
 
-<Install t={t} release={release} />
+<div id="install" class="install-wrap">
+  <Install t={t} release={release} />
+</div>
 
-<main class="wrap">
-  <section>
-    <h2 class="big">{t.featuresTitle}</h2>
-    <dl class="features">
-      {t.features.map(([name, text]) => <div><dt>{name}</dt><dd>{text}</dd></div>)}
-    </dl>
+<main>
+  <section class="wrap block">
+    <h2>{t.featuresTitle}</h2>
+    <div class="cards">
+      {t.features.map(([name, text], i) => (
+        <article class="card">
+          <span class="ico"><Icon name={featureIcons[i]} /></span>
+          <h3>{name}</h3>
+          <p>{text}</p>
+        </article>
+      ))}
+    </div>
+    <p class="more"><a href={docsPath(lang, 'features')}>{t.docs} →</a></p>
   </section>
 
-  <section>
-    <h2 class="big">{t.hostsTitle}</h2>
+  <section class="wrap block">
+    <h2>{t.hostsTitle}</h2>
     <div class="hosts">
-      {t.hosts.map(([name, text, cmd]) => (
-        <div>
+      {t.hosts.map(([name, text, cmd], i) => (
+        <a class="card host" href={docsPath(lang, 'hosts')}>
+          <span class="ico blue"><Icon name={hostIcons[i]} /></span>
           <h3>{name}</h3>
           <p>{text}</p>
           <code>{cmd}</code>
-        </div>
+        </a>
       ))}
     </div>
   </section>
 
-  <section class="secure">
-    <h2 class="big">{t.secureTitle}</h2>
-    <ul>
-      {t.secure.map((s) => <li>{s}</li>)}
-    </ul>
+  <section class="wrap block">
+    <div class="secure">
+      <div>
+        <span class="ico big"><Icon name="shield" /></span>
+        <h2>{t.secureTitle}</h2>
+        <p class="more"><a href={docsPath(lang, 'access')}>{t.docs} →</a></p>
+      </div>
+      <ul>
+        {t.secure.map((s) => <li><Icon name="check" />{s}</li>)}
+      </ul>
+    </div>
   </section>
-
-  <footer>
-    <span class="grow">{t.foot}</span>
-    <a href={`${repo}/blob/main/README${lang === 'es' ? '.es' : ''}.md`}>{t.docs}</a>
-    <a href={`${repo}/issues`}>{t.issues}</a>
-  </footer>
 </main>
+
+<Footer lang={lang} />

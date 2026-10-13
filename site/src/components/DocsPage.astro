@@ -1,0 +1,76 @@
+---
+import { render } from 'astro:content'
+import Base from '../layouts/Base.astro'
+import Header from './Header.astro'
+import Footer from './Footer.astro'
+import { strings, type Lang } from '../i18n'
+import { REPO_URL, docsPath } from '../paths'
+import { slugOf, type Doc } from '../docs'
+
+interface Props {
+  lang: Lang
+  doc: Doc
+  pages: Doc[]
+}
+const { lang, doc, pages } = Astro.props
+const t = strings[lang]
+const other: Lang = lang === 'en' ? 'es' : 'en'
+const slug = slugOf(doc)
+const { Content, headings } = await render(doc)
+const toc = headings.filter((h) => h.depth === 2 || h.depth === 3)
+const i = pages.indexOf(doc)
+const prev = pages[i - 1]
+const next = pages[i + 1]
+const editUrl = `${REPO_URL}/edit/main/site/src/content/docs/${doc.id}.md`
+---
+<Base lang={lang} title={`${doc.data.title} · ducktainer`} description={doc.data.description} otherHref={docsPath(other, slug)}>
+  <Header lang={lang} otherHref={docsPath(other, slug)} active="docs" />
+  <div class="wrap docs">
+    <aside class="docs-side">
+      <details class="docs-menu" open>
+        <summary>{t.menu}</summary>
+        <nav aria-label={t.docsNav}>
+          <ul>
+            {pages.map((p) => (
+              <li><a href={docsPath(lang, slugOf(p))} aria-current={p === doc ? 'page' : undefined}>{p.data.title}</a></li>
+            ))}
+          </ul>
+        </nav>
+      </details>
+    </aside>
+
+    <main class="docs-main">
+      <p class="docs-kicker">{t.docs}</p>
+      <h1>{doc.data.title}</h1>
+      <p class="docs-lede">{doc.data.description}</p>
+      <article class="prose">
+        <Content />
+      </article>
+
+      <nav class="pager" aria-label={t.docsNav}>
+        {prev ? <a class="prev" href={docsPath(lang, slugOf(prev))}><small>← {t.prev}</small>{prev.data.title}</a> : <span></span>}
+        {next && <a class="next" href={docsPath(lang, slugOf(next))}><small>{t.next} →</small>{next.data.title}</a>}
+      </nav>
+      <p class="edit"><a href={editUrl}>{t.editPage}</a></p>
+    </main>
+
+    {toc.length > 0 && (
+      <aside class="docs-toc">
+        <p>{t.onThisPage}</p>
+        <ul>
+          {toc.map((h) => <li class={`d${h.depth}`}><a href={`#${h.slug}`}>{h.text}</a></li>)}
+        </ul>
+      </aside>
+    )}
+  </div>
+  <Footer lang={lang} />
+</Base>
+
+<script>
+  // the sidebar is a collapsible menu on small screens and always open on wide ones
+  const menu = document.querySelector<HTMLDetailsElement>('.docs-menu')
+  const wide = matchMedia('(min-width: 900px)')
+  const sync = () => { if (menu) menu.open = wide.matches }
+  sync()
+  wide.addEventListener('change', sync)
+</script>

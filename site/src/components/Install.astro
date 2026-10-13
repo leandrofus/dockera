@@ -41,10 +41,13 @@ const variants = release
           </label>
         </div>
         <div class="cmd">
+          <div class="term-bar">
+            <span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>
+            <button class="copy" type="button" data-copy data-label={t.copy} data-done={t.copied}>{t.copy}</button>
+          </div>
           {variants.map((v, i) => (
             <pre data-sys={v.sys} data-arch={v.arch} data-text={v.lines?.join('\n') ?? ''} hidden={i !== 0}>{v.lines ? v.lines.map((l, j) => <>{j > 0 && '\n'}<span class="p">$ </span>{l}</>) : <span set:html={t.noRelease} />}</pre>
           ))}
-          <button class="copy" type="button" data-copy data-label={t.copy} data-done={t.copied}>{t.copy}</button>
         </div>
         <p class="after" data-after="pkg" set:html={t.afterPkg} />
         <p class="after" data-after="bin" hidden set:html={t.afterBin} />
@@ -63,6 +66,7 @@ const variants = release
     const ua = navigator.userAgent
     let sys = /Windows/.test(ua) ? 'windows' : /Macintosh/.test(ua) ? 'darwin' : 'dnf'
     if (/arm64|aarch64/i.test(ua)) select.value = 'arm64'
+    const copy = root.querySelector<HTMLButtonElement>('[data-copy]')!
     const show = () => {
       tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.sys === sys)))
       root.querySelectorAll<HTMLElement>('pre[data-sys]').forEach((p) => {
@@ -71,10 +75,11 @@ const variants = release
       const pkg = sys === 'dnf' || sys === 'apt'
       root.querySelector<HTMLElement>('[data-after="pkg"]')!.hidden = !pkg
       root.querySelector<HTMLElement>('[data-after="bin"]')!.hidden = pkg
+      // a release without the file for this system shows a link, not a command
+      copy.hidden = !root.querySelector<HTMLElement>('pre[data-sys]:not([hidden])')?.dataset.text
     }
     tabs.forEach((b) => b.addEventListener('click', () => { sys = b.dataset.sys!; show() }))
     select.addEventListener('change', show)
-    const copy = root.querySelector<HTMLButtonElement>('[data-copy]')!
     copy.addEventListener('click', async () => {
       const text = root.querySelector<HTMLElement>('pre[data-sys]:not([hidden])')?.dataset.text
       if (!text) return

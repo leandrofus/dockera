@@ -3,9 +3,10 @@ import Base from '../layouts/Base.astro'
 import Home from '../components/Home.astro'
 import { strings } from '../i18n'
 import { latestRelease } from '../release'
+import { homePath } from '../paths'
 
 const release = await latestRelease()
 ---
-<Base lang="en" title={strings.en.title} description={strings.en.description}>
+<Base lang="en" title={strings.en.title} description={strings.en.description} otherHref={homePath('es')}>
   <Home lang="en" release={release} />
 </Base>
