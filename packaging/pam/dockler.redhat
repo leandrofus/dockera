@@ -1,0 +1,5 @@
+#%PAM-1.0
+# dockler web login (RHEL / Fedora / SUSE-like): same policy as remote logins.
+auth       substack     password-auth
+account    required     pam_nologin.so
+account    include      password-auth

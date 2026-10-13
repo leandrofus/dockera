@@ -1,0 +1,20 @@
+[Unit]
+Description=dockler - PAM credential check
+CollectMode=inactive-or-failed
+
+[Service]
+Type=simple
+# Root only for the duration of one login attempt: reads one request from
+# the socket, runs the PAM "dockler" stack, answers and exits.
+ExecStart=/usr/bin/dockler pam-helper --service dockler
+StandardInput=socket
+StandardOutput=socket
+StandardError=journal
+User=root
+RuntimeMaxSec=60
+PrivateTmp=yes
+ProtectSystem=full
+ProtectHome=read-only
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes

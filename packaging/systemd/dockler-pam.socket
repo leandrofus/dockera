@@ -1,0 +1,16 @@
+[Unit]
+Description=dockler - system credential check (socket)
+PartOf=dockler.service
+
+[Socket]
+# Only the dockler group (the service user) may ask for password checks.
+ListenStream=/run/dockler/pam.sock
+SocketUser=root
+SocketGroup=dockler
+SocketMode=0660
+DirectoryMode=0755
+Accept=yes
+MaxConnections=16
+
+[Install]
+WantedBy=sockets.target

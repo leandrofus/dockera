@@ -1,0 +1,965 @@
+// dockler: agentless Docker administration in a single binary.
+package main
+
+import (
+	"bufio"
+	"context"
+	"crypto/tls"
+	"errors"
+	"flag"
+	"fmt"
+	"io/fs"
+	"log"
+	"net"
+	"net/http"
+	"os"
+	"os/exec"
+	"os/signal"
+	"path/filepath"
+	"runtime"
+	"strings"
+	"syscall"
+	"text/tabwriter"
+	"time"
+
+	"golang.org/x/term"
+
+	"dockler/internal/access"
+	"dockler/internal/agent"
+	"dockler/internal/auth"
+	"dockler/internal/cli"
+	"dockler/internal/compose"
+	"dockler/internal/config"
+	"dockler/internal/docker"
+	"dockler/internal/i18n"
+	"dockler/internal/proxy"
+	"dockler/internal/server"
+	"dockler/internal/setup"
+	"dockler/internal/tlsutil"
+	"dockler/packaging"
+	"dockler/web"
+)
+
+var version = "dev"
+
+const usage = `dockler — lightweight Docker management
+
+Usage:
+  dockler serve      [--listen 127.0.0.1:9900] [--allow IP,CIDR,host] [--tls auto|on|off]
+                     [--expose :2376 [--expose-read-only] [--expose-no-exec]]
+                     [--agent-listen :9901]
+                       Web UI + API. With --expose it also publishes the Docker API
+                       (filtered by allowlist + token) for other dockler instances or the docker CLI.
+  dockler expose     [--listen :2376] [--allow ...] [--read-only] [--no-exec]
+                       Only publishes the Docker API, protected (no UI).
+  dockler agent      --server https://host:9900 --token <token> [--name <name>]
+                     [--socket /var/run/docker.sock] [--insecure] [--fingerprint <sha256>]
+                     [--install-service]
+                       Connects this node outbound to the central dockler server (ideal behind NAT/firewall).
+  dockler ui                Opens the UI locally (127.0.0.1) and launches the browser.
+
+  dockler ps    [-e endpoint]                         Containers grouped by stack
+  dockler logs  [-e endpoint] [-f] [-n 200] <container|stack>
+  dockler sh    [-e endpoint] [-u user] <container> [command...]
+                                                      Interactive shell (picks bash/ash/sh)
+
+  dockler auth show | set … | test <user>             Sign-in with system users (PAM) and roles by group
+  dockler token [--rotate]                            Show/rotate the access token (emergency/API)
+  dockler allow ls | add <IP|CIDR|host>... | rm <entry>...
+  dockler endpoint ls | add <name> <url> [--token T] [--tls] [--fingerprint F] [--key file] | rm <name>
+                       url: unix:///var/run/docker.sock · ssh://user@host[:port] · tcp://host:2376 · agent://name
+  dockler registry ls | add <name> <server> <user> (password on stdin) | rm <name>
+  dockler docker-env <endpoint>                       Variables to use the docker CLI against an endpoint
+  dockler install-service [serve flags]               Install a systemd service (root)
+  dockler setup [--socket PATH] [--dry-run]           Adapt the service to the Docker installation (group,
+                                                      rootless or root) based on the detected socket
+  dockler version
+
+Data and configuration: %s  (change with DOCKLER_HOME)
+`
+
+func main() {
+	log.SetFlags(log.Ldate | log.Ltime)
+	config.PAMAvailable = auth.Available
+	var cmd string
+	var args []string
+	if len(os.Args) < 2 {
+		if strings.HasSuffix(filepath.Base(os.Args[0]), "agent") {
+			cmd = "agent"
+			args = nil
+		} else {
+			i18n.Fprintf(os.Stderr, usage, config.Dir())
+			os.Exit(2)
+		}
+	} else {
+		cmd, args = os.Args[1], os.Args[2:]
+		if strings.HasSuffix(filepath.Base(os.Args[0]), "agent") && strings.HasPrefix(cmd, "-") {
+			cmd = "agent"
+			args = os.Args[1:]
+		}
+	}
+	var err error
+	switch cmd {
+	case "serve":
+		err = cmdServe(args, false)
+	case "ui":
+		err = cmdServe(args, true)
+	case "agent":
+		err = cmdAgent(args)
+	case "expose":
+		err = cmdExpose(args)
+	case "ps":
+		err = withClient("ps", args, func(ctx context.Context, c *docker.Client, rest []string) error { return cli.PS(ctx, c) })
+	case "logs":
+		err = cmdLogs(args)
+	case "sh", "exec":
+		err = cmdShell(args)
+	case "token":
+		err = cmdToken(args)
+	case "allow":
+		err = cmdAllow(args)
+	case "endpoint", "endpoints":
+		err = cmdEndpoint(args)
+	case "registry", "registries":
+		err = cmdRegistry(args)
+	case "docker-env":
+		err = cmdDockerEnv(args)
+	case "install-service":
+		err = cmdInstall(args)
+	case "setup":
+		err = cmdSetup(args)
+	case "pam-helper":
+		err = cmdPAMHelper(args)
+	case "auth":
+		err = cmdAuth(args)
+	case "version", "--version", "-v":
+		fmt.Println("dockler", version)
+	case "help", "-h", "--help":
+		i18n.Printf(usage, config.Dir())
+	default:
+		i18n.Fprintf(os.Stderr, "unknown command %q\n\n", cmd)
+		i18n.Fprintf(os.Stderr, usage, config.Dir())
+		os.Exit(2)
+	}
+	if err != nil {
+		var ee interface{ ExitCode() int }
+		if errors.As(err, &ee) {
+			os.Exit(ee.ExitCode())
+		}
+		fmt.Fprintln(os.Stderr, "error:", i18n.Render(err, i18n.Env()))
+		os.Exit(1)
+	}
+}
+
+type listFlag []string
+
+func (l *listFlag) String() string { return strings.Join(*l, ",") }
+func (l *listFlag) Set(v string) error {
+	for _, p := range strings.Split(v, ",") {
+		if p = strings.TrimSpace(p); p != "" {
+			*l = append(*l, p)
+		}
+	}
+	return nil
+}
+
+type listenOpts struct {
+	allow      listFlag
+	tlsMode    string
+	cert, key  string
+	trustProxy bool
+}
+
+func (o *listenOpts) register(fs *flag.FlagSet) {
+	fs.Var(&o.allow, "allow", i18n.Sprintf("allowed IPs, CIDRs or hostnames (repeatable or comma-separated). Loopback is always allowed"))
+	fs.StringVar(&o.tlsMode, "tls", "auto", i18n.Sprintf("auto (TLS when listening outside loopback), on, off"))
+	fs.StringVar(&o.cert, "cert", "", i18n.Sprintf("TLS certificate (self-signed by default)"))
+	fs.StringVar(&o.key, "key", "", i18n.Sprintf("TLS key"))
+}
+
+func isLoopbackAddr(addr string) bool {
+	host, _, err := net.SplitHostPort(addr)
+	if err != nil {
+		return false
+	}
+	if host == "localhost" {
+		return true
+	}
+	ip := net.ParseIP(host)
+	return ip != nil && ip.IsLoopback()
+}
+
+func (o *listenOpts) tlsConfig(addr string) (*tls.Config, string, error) {
+	on := o.tlsMode == "on" || (o.tlsMode == "auto" && !isLoopbackAddr(addr))
+	if !on {
+		return nil, "", nil
+	}
+	return tlsutil.Load(config.Dir(), o.cert, o.key)
+}
+
+func listen(addr string, acl *access.List, tc *tls.Config) (net.Listener, error) {
+	ln, err := net.Listen("tcp", addr)
+	if err != nil {
+		return nil, err
+	}
+	ln = acl.Listener(ln)
+	if tc != nil {
+		ln = tls.NewListener(ln, tc)
+	}
+	return ln, nil
+}
+
+func localClient(cfg *config.Config, host string) (*docker.Client, error) {
+	ep := config.Endpoint{Name: "local", URL: host}
+	if host == "" {
+		if e, ok := cfg.Endpoint("local"); ok && !strings.HasPrefix(e.URL, "tcp") {
+			ep = e
+		} else {
+			ep.URL = "unix:///var/run/docker.sock"
+		}
+	}
+	return docker.New(ep)
+}
+
+func cmdServe(args []string, openBrowser bool) error {
+	fs := flag.NewFlagSet("serve", flag.ExitOnError)
+	var o listenOpts
+	o.register(fs)
+	addr := fs.String("listen", "", i18n.Sprintf("listen address (default 127.0.0.1:9900, or 0.0.0.0:9900 when --allow is used)"))
+	expose := fs.String("expose", "", i18n.Sprintf("also publish the Docker API on this address (e.g. :2376)"))
+	exposeRO := fs.Bool("expose-read-only", false, i18n.Sprintf("published API is read-only"))
+	exposeNoExec := fs.Bool("expose-no-exec", false, i18n.Sprintf("block exec/attach on the published API"))
+	agentListen := fs.String("agent-listen", "", i18n.Sprintf("dedicated listen address for agents without IP allowlist (e.g. :9901)"))
+	fs.Parse(args)
+
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if *addr == "" {
+		*addr = "127.0.0.1:9900"
+		if len(o.allow) > 0 || len(cfg.Allow) > 0 {
+			*addr = "0.0.0.0:9900"
+		}
+	}
+	server.ExtraAllow = o.allow
+	acl, err := access.New(append(append([]string(nil), o.allow...), cfg.Allow...))
+	if err != nil {
+		return err
+	}
+	tc, fp, err := o.tlsConfig(*addr)
+	if err != nil {
+		return err
+	}
+	srv := server.New(cfg, acl, web.FS())
+	cfg.Watch(srv.ReloadAccess)
+	srv.Secure = tc != nil
+	srv.Version = version
+	srv.Listen, srv.Expose = *addr, *expose
+	ln, err := listen(*addr, acl, tc)
+	if err != nil {
+		return err
+	}
+	scheme := "http"
+	if tc != nil {
+		scheme = "https"
+	}
+	uiURL := fmt.Sprintf("%s://%s", scheme, displayAddr(*addr))
+	fmt.Printf("\n  dockler %s\n\n", version)
+	fmt.Printf("  UI         %s\n", uiURL)
+	snap := cfg.Snapshot()
+	if snap.Auth.PAM {
+		i18n.Printf("  Users      system (%s) · admin: %s · read-only: %s\n", i18n.Sprintf(auth.Mode()), strings.Join(snap.Auth.AdminGroups, ","), strings.Join(snap.Auth.ViewerGroups, ","))
+	}
+	if snap.Auth.TokenLogin {
+		fmt.Printf("  Token      %s\n", cfg.Token)
+	}
+	fmt.Printf("  Allowlist  loopback %s\n", strings.Join(acl.Entries(), " "))
+	if fp != "" {
+		fmt.Printf("  TLS sha256 %s\n", fp)
+	}
+	i18n.Printf("  Data       %s\n\n", config.Dir())
+
+	errc := make(chan error, 2)
+	hs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 15 * time.Second}
+	go func() { errc <- hs.Serve(ln) }()
+
+	if *expose != "" {
+		c, err := localClient(cfg, "")
+		if err != nil {
+			return err
+		}
+		etc, efp, err := o.tlsConfig(*expose)
+		if err != nil {
+			return err
+		}
+		eln, err := listen(*expose, acl, etc)
+		if err != nil {
+			return err
+		}
+		ph := proxy.Handler(c, proxy.Options{Token: func() string { return cfg.Snapshot().Token }, ReadOnly: *exposeRO, NoExec: *exposeNoExec})
+		i18n.Printf("  Docker API exposed on %s (token required", *expose)
+		if efp != "" {
+			fmt.Printf(", TLS sha256 %s", efp)
+		}
+		fmt.Println(")")
+		go func() { errc <- (&http.Server{Handler: ph, ReadHeaderTimeout: 15 * time.Second}).Serve(eln) }()
+	}
+	if *agentListen != "" {
+		srv.AgentListen = *agentListen
+		atc, afp, err := o.tlsConfig(*agentListen)
+		if err != nil {
+			return err
+		}
+		aln, err := net.Listen("tcp", *agentListen)
+		if err != nil {
+			return err
+		}
+		if atc != nil {
+			aln = tls.NewListener(aln, atc)
+		}
+		agentHs := &http.Server{Handler: srv.Handler(), ReadHeaderTimeout: 15 * time.Second}
+		go func() { errc <- agentHs.Serve(aln) }()
+		i18n.Printf("  Agents     listening on %s (token required, no IP allowlist", *agentListen)
+		if afp != "" {
+			fmt.Printf(", TLS sha256 %s", afp)
+		}
+		fmt.Println(")")
+	}
+	if openBrowser {
+		go func() {
+			time.Sleep(400 * time.Millisecond)
+			for _, b := range []string{"xdg-open", "open"} {
+				if exec.Command(b, uiURL).Start() == nil {
+					return
+				}
+			}
+		}()
+	}
+	return waitSignal(errc)
+}
+
+func displayAddr(addr string) string {
+	host, port, _ := net.SplitHostPort(addr)
+	if host == "" || host == "0.0.0.0" || host == "::" {
+		if h, err := os.Hostname(); err == nil {
+			host = h
+		}
+	}
+	return net.JoinHostPort(host, port)
+}
+
+func waitSignal(errc chan error) error {
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt, syscall.SIGTERM)
+	select {
+	case err := <-errc:
+		return err
+	case <-sig:
+		fmt.Println("\ndetenido")
+		return nil
+	}
+}
+
+func cmdAgent(args []string) error {
+	fs := flag.NewFlagSet("agent", flag.ExitOnError)
+	serverURL := fs.String("server", "", i18n.Sprintf("dockler server URL (e.g. https://dockler.example.com:9900)"))
+	token := fs.String("token", "", i18n.Sprintf("agent enrollment or admin token"))
+	name := fs.String("name", "", i18n.Sprintf("node name (defaults to hostname)"))
+	socket := fs.String("socket", "", i18n.Sprintf("local Docker socket path (default /var/run/docker.sock)"))
+	insecure := fs.Bool("insecure", false, i18n.Sprintf("skip TLS certificate verification (useful for self-signed certificates)"))
+	fp := fs.String("fingerprint", "", i18n.Sprintf("expected sha256 fingerprint of the server certificate"))
+	installService := fs.Bool("install-service", false, i18n.Sprintf("install and start as a systemd service (Linux)"))
+	fs.Parse(args)
+
+	cfg := agent.Config{
+		Server:      *serverURL,
+		Token:       *token,
+		Name:        *name,
+		Socket:      *socket,
+		Insecure:    *insecure,
+		Fingerprint: *fp,
+	}
+
+	if *installService {
+		return agent.InstallService(cfg)
+	}
+
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+
+	return agent.Run(ctx, cfg)
+}
+
+func cmdExpose(args []string) error {
+	fs := flag.NewFlagSet("expose", flag.ExitOnError)
+	var o listenOpts
+	o.register(fs)
+	addr := fs.String("listen", ":2376", i18n.Sprintf("listen address"))
+	host := fs.String("host", "", i18n.Sprintf("local daemon (default: the local endpoint / socket)"))
+	ro := fs.Bool("read-only", false, i18n.Sprintf("allow reads only (GET)"))
+	noExec := fs.Bool("no-exec", false, i18n.Sprintf("block exec/attach"))
+	fs.Parse(args)
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	acl, err := access.New(append(append([]string(nil), o.allow...), cfg.Allow...))
+	if err != nil {
+		return err
+	}
+	if len(acl.Entries()) == 0 {
+		i18n.Fprintf(os.Stderr, "warning: empty allowlist, only loopback can connect (use --allow)\n")
+	}
+	c, err := localClient(cfg, *host)
+	if err != nil {
+		return err
+	}
+	if err := c.Ping(context.Background()); err != nil {
+		return i18n.Errorf("cannot talk to the local daemon: %v", err)
+	}
+	tc, fp, err := o.tlsConfig(*addr)
+	if err != nil {
+		return err
+	}
+	ln, err := listen(*addr, acl, tc)
+	if err != nil {
+		return err
+	}
+	h := proxy.Handler(c, proxy.Options{Token: func() string { return cfg.Snapshot().Token }, ReadOnly: *ro, NoExec: *noExec})
+	i18n.Printf("\n  Docker API exposed on %s\n", *addr)
+	fmt.Printf("  Allowlist  loopback %s\n", strings.Join(acl.Entries(), " "))
+	fmt.Printf("  Token      %s\n", cfg.Token)
+	tlsFlag := ""
+	if fp != "" {
+		fmt.Printf("  TLS sha256 %s\n", fp)
+		tlsFlag = " --tls --fingerprint " + fp
+	}
+	i18n.Printf("\n  From another dockler:\n    dockler endpoint add %s tcp://%s --token %s%s\n\n", hostname(), displayAddr(*addr), cfg.Token, tlsFlag)
+	errc := make(chan error, 1)
+	go func() { errc <- (&http.Server{Handler: h, ReadHeaderTimeout: 15 * time.Second}).Serve(ln) }()
+	return waitSignal(errc)
+}
+
+func hostname() string {
+	h, _ := os.Hostname()
+	if h == "" {
+		return "remoto"
+	}
+	return strings.Split(h, ".")[0]
+}
+
+// withClient parses -e and runs fn with the endpoint's client.
+func withClient(name string, args []string, fn func(ctx context.Context, c *docker.Client, rest []string) error, extra ...func(*flag.FlagSet)) error {
+	fs := flag.NewFlagSet(name, flag.ExitOnError)
+	ep := fs.String("e", "local", "endpoint")
+	for _, f := range extra {
+		f(fs)
+	}
+	fs.Parse(args)
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	e, ok := cfg.Endpoint(*ep)
+	if !ok {
+		return i18n.Errorf("unknown endpoint %q (see `dockler endpoint ls`)", *ep)
+	}
+	c, err := docker.New(e)
+	if err != nil {
+		return err
+	}
+	ctx, cancel := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer cancel()
+	return fn(ctx, c, fs.Args())
+}
+
+func cmdLogs(args []string) error {
+	var follow bool
+	var tail string
+	return withClient("logs", args, func(ctx context.Context, c *docker.Client, rest []string) error {
+		if len(rest) != 1 {
+			return i18n.Errorf("usage: dockler logs [-f] [-n 200] <container|stack>")
+		}
+		return cli.Logs(ctx, c, rest[0], follow, tail)
+	}, func(fs *flag.FlagSet) {
+		fs.BoolVar(&follow, "f", false, i18n.Sprintf("follow"))
+		fs.StringVar(&tail, "n", "200", i18n.Sprintf("initial lines (all for everything)"))
+	})
+}
+
+func cmdShell(args []string) error {
+	var user string
+	return withClient("sh", args, func(ctx context.Context, c *docker.Client, rest []string) error {
+		if len(rest) < 1 {
+			return i18n.Errorf("usage: dockler sh [-u user] <container> [command...]")
+		}
+		// the shell must not be killed by ctrl-c: it belongs to the remote tty
+		return cli.Shell(context.Background(), c, rest[0], user, rest[1:])
+	}, func(fs *flag.FlagSet) { fs.StringVar(&user, "u", "", i18n.Sprintf("user")) })
+}
+
+func cmdToken(args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if len(args) > 0 && args[0] == "--rotate" {
+		if err := cfg.Update(func(c *config.Config) error { c.Token = config.NewToken(); return nil }); err != nil {
+			return err
+		}
+		i18n.Fprintf(os.Stderr, "token rotated; running services pick it up automatically\n")
+	}
+	fmt.Println(cfg.Snapshot().Token)
+	return nil
+}
+
+func cmdAllow(args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if len(args) == 0 || args[0] == "ls" {
+		i18n.Printf("loopback (always)\n")
+		for _, a := range cfg.Allow {
+			fmt.Println(a)
+		}
+		return nil
+	}
+	switch args[0] {
+	case "add":
+		if _, err := access.New(args[1:]); err != nil {
+			return err
+		}
+		return cfg.Update(func(c *config.Config) error { c.Allow = appendUnique(c.Allow, args[1:]...); return nil })
+	case "rm":
+		return cfg.Update(func(c *config.Config) error {
+			out := c.Allow[:0]
+			for _, a := range c.Allow {
+				if !contains(args[1:], a) {
+					out = append(out, a)
+				}
+			}
+			c.Allow = out
+			return nil
+		})
+	}
+	return i18n.Errorf("usage: dockler allow ls | add ... | rm ...")
+}
+
+func appendUnique(s []string, v ...string) []string {
+	for _, x := range v {
+		if !contains(s, x) {
+			s = append(s, x)
+		}
+	}
+	return s
+}
+
+func contains(s []string, v string) bool {
+	for _, x := range s {
+		if x == v {
+			return true
+		}
+	}
+	return false
+}
+
+func cmdEndpoint(args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if len(args) == 0 || args[0] == "ls" {
+		tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+		i18n.Fprintf(tw, "NAME\tURL\tSTATUS\n")
+		for _, e := range cfg.Snapshot().Endpoints {
+			status := "ok"
+			c, err := docker.New(e)
+			if err == nil {
+				err = c.Ping(context.Background())
+			}
+			if err != nil {
+				status = "error: " + i18n.Render(err, i18n.Env())
+			}
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", e.Name, e.URL, status)
+		}
+		return tw.Flush()
+	}
+	switch args[0] {
+	case "add":
+		fs := flag.NewFlagSet("endpoint add", flag.ExitOnError)
+		token := fs.String("token", "", i18n.Sprintf("token of the remote `dockler expose`"))
+		useTLS := fs.Bool("tls", false, i18n.Sprintf("use TLS"))
+		fp := fs.String("fingerprint", "", i18n.Sprintf("sha256 fingerprint of the remote certificate"))
+		key := fs.String("key", "", i18n.Sprintf("SSH key"))
+		if len(args) < 3 {
+			return i18n.Errorf("usage: dockler endpoint add <name> <url> [--token T] [--tls] [--fingerprint F] [--key file]")
+		}
+		fs.Parse(args[3:])
+		ep := config.Endpoint{Name: args[1], URL: args[2], Token: *token, TLS: *useTLS || *fp != "", Fingerprint: *fp, SSHKey: *key}
+		c, err := docker.New(ep)
+		if err != nil {
+			return err
+		}
+		if err := c.Ping(context.Background()); err != nil {
+			i18n.Fprintf(os.Stderr, "warning: could not connect right now: %v\n", err)
+		} else {
+			i18n.Fprintf(os.Stderr, "connection verified ✓\n")
+		}
+		return cfg.Update(func(c *config.Config) error {
+			for i, e := range c.Endpoints {
+				if e.Name == ep.Name {
+					c.Endpoints[i] = ep
+					return nil
+				}
+			}
+			c.Endpoints = append(c.Endpoints, ep)
+			return nil
+		})
+	case "rm":
+		if len(args) < 2 {
+			return i18n.Errorf("usage: dockler endpoint rm <name>")
+		}
+		return cfg.Update(func(c *config.Config) error {
+			out := c.Endpoints[:0]
+			for _, e := range c.Endpoints {
+				if e.Name != args[1] {
+					out = append(out, e)
+				}
+			}
+			c.Endpoints = out
+			return nil
+		})
+	}
+	return i18n.Errorf("usage: dockler endpoint ls | add | rm")
+}
+
+func cmdRegistry(args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	if len(args) == 0 || args[0] == "ls" {
+		tw := tabwriter.NewWriter(os.Stdout, 0, 2, 2, ' ', 0)
+		i18n.Fprintf(tw, "NAME\tSERVER\tUSER\n")
+		for _, r := range cfg.Registry {
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", r.Name, r.Server, r.Username)
+		}
+		return tw.Flush()
+	}
+	switch args[0] {
+	case "add":
+		if len(args) < 4 {
+			return i18n.Errorf("usage: echo $PASS | dockler registry add <name> <server> <user>")
+		}
+		i18n.Fprintf(os.Stderr, "password/token: ")
+		pass, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+		reg := config.Registry{Name: args[1], Server: args[2], Username: args[3], Password: strings.TrimSpace(pass)}
+		return cfg.Update(func(c *config.Config) error {
+			for i, r := range c.Registry {
+				if r.Name == reg.Name {
+					c.Registry[i] = reg
+					return nil
+				}
+			}
+			c.Registry = append(c.Registry, reg)
+			return nil
+		})
+	case "rm":
+		if len(args) < 2 {
+			return i18n.Errorf("usage: dockler registry rm <name>")
+		}
+		return cfg.Update(func(c *config.Config) error {
+			out := c.Registry[:0]
+			for _, r := range c.Registry {
+				if r.Name != args[1] {
+					out = append(out, r)
+				}
+			}
+			c.Registry = out
+			return nil
+		})
+	}
+	return i18n.Errorf("usage: dockler registry ls | add | rm")
+}
+
+// cmdDockerEnv prints how to point the docker CLI at an endpoint.
+func cmdDockerEnv(args []string) error {
+	if len(args) != 1 {
+		return i18n.Errorf("usage: dockler docker-env <endpoint>")
+	}
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	e, ok := cfg.Endpoint(args[0])
+	if !ok {
+		return i18n.Errorf("unknown endpoint %q", args[0])
+	}
+	fmt.Printf("export DOCKER_HOST=%s\n", e.URL)
+	dir := filepath.Join(config.Dir(), "docker-config", e.Name)
+	if e.Token != "" || e.TLS {
+		os.MkdirAll(dir, 0o700)
+	}
+	if e.Token != "" {
+		data := fmt.Sprintf(`{"HttpHeaders":{"Authorization":"Bearer %s"}}`, e.Token)
+		if err := os.WriteFile(filepath.Join(dir, "config.json"), []byte(data), 0o600); err != nil {
+			return err
+		}
+		fmt.Printf("export DOCKER_CONFIG=%s\n", dir)
+	}
+	if e.TLS {
+		vars, err := compose.TLSEnv(context.Background(), e, dir)
+		if err != nil {
+			return err
+		}
+		for _, v := range vars {
+			fmt.Println("export " + v)
+		}
+	}
+	fmt.Println("# eval \"$(dockler docker-env " + e.Name + ")\"")
+	return nil
+}
+
+func cmdInstall(args []string) error {
+	if runtime.GOOS != "linux" {
+		return i18n.Errorf("install-service is only available on Linux (systemd)")
+	}
+	if os.Geteuid() != 0 {
+		return i18n.Errorf("run as root: sudo dockler install-service [serve flags]")
+	}
+	self, err := os.Executable()
+	if err != nil {
+		return err
+	}
+	bin := "/usr/local/bin/dockler"
+	if self != bin {
+		data, err := os.ReadFile(self)
+		if err != nil {
+			return err
+		}
+		if err := os.WriteFile(bin+".new", data, 0o755); err != nil {
+			return err
+		}
+		if err := os.Rename(bin+".new", bin); err != nil {
+			return err
+		}
+	}
+	write := func(src, dst string, mode os.FileMode, keep bool) error {
+		if keep {
+			if _, err := os.Stat(dst); err == nil {
+				return nil
+			}
+		}
+		data, err := fs.ReadFile(packaging.Files, src)
+		if err != nil {
+			return err
+		}
+		data = []byte(strings.ReplaceAll(string(data), "/usr/bin/dockler", bin))
+		os.MkdirAll(filepath.Dir(dst), 0o755)
+		return os.WriteFile(dst, data, mode)
+	}
+	for _, u := range []string{"dockler.service", "dockler-pam.socket", "dockler-pam@.service"} {
+		if err := write("systemd/"+u, "/etc/systemd/system/"+u, 0o644, false); err != nil {
+			return err
+		}
+	}
+	pamSrc := "pam/dockler.debian"
+	if _, err := os.Stat("/etc/pam.d/password-auth"); err == nil {
+		pamSrc = "pam/dockler.redhat"
+	}
+	if err := write(pamSrc, "/etc/pam.d/dockler", 0o644, true); err != nil {
+		return err
+	}
+	if _, err := os.Stat("/etc/dockler/dockler.env"); os.IsNotExist(err) {
+		os.MkdirAll("/etc/dockler", 0o755)
+		env := fmt.Sprintf("# `dockler serve` options\nDOCKLER_OPTS=%q\n", strings.Join(args, " "))
+		if err := os.WriteFile("/etc/dockler/dockler.env", []byte(env), 0o644); err != nil {
+			return err
+		}
+	}
+	script, err := fs.ReadFile(packaging.Files, "scripts/postinstall.sh")
+	if err != nil {
+		return err
+	}
+	cmd := exec.Command("/bin/sh", "-s", "1")
+	cmd.Stdin = strings.NewReader(strings.ReplaceAll(string(script), "/usr/bin/dockler", bin))
+	cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+	if err := cmd.Run(); err != nil {
+		return i18n.Errorf("post-install: %v", err)
+	}
+	if !auth.Available {
+		i18n.Printf("warning: this binary has no PAM support (built without -tags pam): only token sign-in will work.\n         Use the rpm/deb packages or build with `make build-pam`.\n")
+	}
+	return nil
+}
+
+func cmdPAMHelper(args []string) error {
+	fs := flag.NewFlagSet("pam-helper", flag.ExitOnError)
+	service := fs.String("service", "dockler", i18n.Sprintf("PAM service"))
+	fs.Parse(args)
+	return auth.ServeHelper(*service, os.Stdin, os.Stdout)
+}
+
+func cmdAuth(args []string) error {
+	cfg, err := config.Load()
+	if err != nil {
+		return err
+	}
+	sub := "show"
+	if len(args) > 0 {
+		sub, args = args[0], args[1:]
+	}
+	switch sub {
+	case "show":
+		a := cfg.Snapshot().Auth
+		i18n.Printf("system users (PAM):  %v   [PAM service %q · %s]\n", a.PAM, a.PAMService, i18n.Sprintf(auth.Mode()))
+		i18n.Printf("token sign-in:       %v\n", a.TokenLogin)
+		i18n.Printf("admin groups:        %s\n", strings.Join(a.AdminGroups, ", "))
+		i18n.Printf("read-only groups:    %s\n", strings.Join(a.ViewerGroups, ", "))
+		i18n.Printf("admin users:         %s\n", strings.Join(a.AdminUsers, ", "))
+		i18n.Printf("read-only users:     %s\n", strings.Join(a.ViewerUsers, ", "))
+		i18n.Printf("allow root:          %v\n", a.AllowRoot)
+		i18n.Printf("session duration:    %dh\n", a.SessionHours)
+		return nil
+	case "set":
+		fs := flag.NewFlagSet("auth set", flag.ExitOnError)
+		pam := fs.String("pam", "", "on|off")
+		tok := fs.String("token-login", "", "on|off")
+		root := fs.String("allow-root", "", "on|off")
+		var ag, vg, au, vu listFlag
+		fs.Var(&ag, "admin-groups", i18n.Sprintf("admin groups (replaces the list)"))
+		fs.Var(&vg, "viewer-groups", i18n.Sprintf("read-only groups"))
+		fs.Var(&au, "admin-users", i18n.Sprintf("admin users"))
+		fs.Var(&vu, "viewer-users", i18n.Sprintf("read-only users"))
+		hours := fs.Int("session-hours", 0, i18n.Sprintf("session duration"))
+		fs.Parse(args)
+		set := map[string]bool{}
+		fs.Visit(func(f *flag.Flag) { set[f.Name] = true })
+		onoff := func(v string) bool { return v == "on" || v == "true" || v == "1" }
+		err := cfg.Update(func(c *config.Config) error {
+			a := c.Auth
+			if set["pam"] {
+				a.PAM = onoff(*pam)
+			}
+			if set["token-login"] {
+				a.TokenLogin = onoff(*tok)
+			}
+			if set["allow-root"] {
+				a.AllowRoot = onoff(*root)
+			}
+			if set["admin-groups"] {
+				a.AdminGroups = ag
+			}
+			if set["viewer-groups"] {
+				a.ViewerGroups = vg
+			}
+			if set["admin-users"] {
+				a.AdminUsers = au
+			}
+			if set["viewer-users"] {
+				a.ViewerUsers = vu
+			}
+			if *hours > 0 {
+				a.SessionHours = *hours
+			}
+			if !a.PAM && !a.TokenLogin {
+				return i18n.Errorf("keep at least one sign-in method enabled")
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+		return cmdAuth([]string{"show"})
+	case "test":
+		if len(args) != 1 {
+			return i18n.Errorf("usage: dockler auth test <user>")
+		}
+		i18n.Fprintf(os.Stderr, "password for %s: ", args[0])
+		var pass []byte
+		if term.IsTerminal(int(os.Stdin.Fd())) {
+			pass, err = term.ReadPassword(int(os.Stdin.Fd()))
+			fmt.Fprintln(os.Stderr)
+		} else {
+			line, _ := bufio.NewReader(os.Stdin).ReadString('\n')
+			pass = []byte(strings.TrimRight(line, "\r\n"))
+		}
+		if err != nil {
+			return err
+		}
+		a := cfg.Snapshot().Auth
+		i18n.Printf("method: %s\n", i18n.Sprintf(auth.Mode()))
+		if err := auth.Login(a.PAMService, args[0], string(pass), ""); err != nil {
+			return i18n.Errorf("authentication: %v", err)
+		}
+		i18n.Printf("password correct ✓\n")
+		groups, _ := auth.Groups(args[0])
+		i18n.Printf("groups: %s\n", strings.Join(groups, ", "))
+		role, err := (auth.Policy{AdminGroups: a.AdminGroups, ViewerGroups: a.ViewerGroups, AdminUsers: a.AdminUsers, ViewerUsers: a.ViewerUsers, AllowRoot: a.AllowRoot}).Role(args[0])
+		if err != nil {
+			return err
+		}
+		i18n.Printf("dockler role: %s\n", role)
+		return nil
+	}
+	return i18n.Errorf("usage: dockler auth show | set [--pam on|off] [--token-login on|off] [--admin-groups a,b] [--viewer-groups c] … | test <user>")
+}
+
+func cmdSetup(args []string) error {
+	fs := flag.NewFlagSet("setup", flag.ExitOnError)
+	socket := fs.String("socket", "", i18n.Sprintf("daemon socket (detected by default)"))
+	dry := fs.Bool("dry-run", false, i18n.Sprintf("only show what would be done"))
+	noRestart := fs.Bool("no-restart", false, i18n.Sprintf("do not restart dockler.service"))
+	quiet := fs.Bool("quiet", false, i18n.Sprintf("less output"))
+	fs.Parse(args)
+	plan := setup.Detect(*socket)
+	if !*quiet || *dry {
+		fmt.Printf("socket:  %s", plan.Socket)
+		if plan.Exists {
+			fmt.Printf("  (%s:%s %04o, %s)", plan.Owner, plan.Group, plan.Perm, plan.Source)
+		} else if plan.Source != "" {
+			fmt.Printf("  (%s)", plan.Source)
+		}
+		i18n.Printf("\nmode:    %s\n", plan.Mode)
+		for _, n := range plan.Notes {
+			fmt.Println("  ·", n)
+		}
+	}
+	if *dry {
+		if c := plan.DropInContent(); c != "" {
+			fmt.Printf("\n%s:\n%s", setup.DropIn, c)
+		}
+		return nil
+	}
+	if err := plan.Apply(!*noRestart); err != nil {
+		return err
+	}
+	// point the "local" endpoint at the detected socket
+	if plan.Socket != "" {
+		cfg, err := config.Load()
+		if err != nil {
+			return err
+		}
+		err = cfg.Update(func(c *config.Config) error {
+			for i, e := range c.Endpoints {
+				if e.Name == "local" && strings.HasPrefix(e.URL, "unix://") {
+					c.Endpoints[i].URL = "unix://" + plan.Socket
+				}
+			}
+			return nil
+		})
+		if err != nil {
+			return err
+		}
+	}
+	if !*quiet {
+		if plan.Mode == setup.ModeNone {
+			i18n.Printf("no changes: there is no Docker to configure\n")
+		} else {
+			i18n.Printf("service configured: %s\n", setup.DropIn)
+		}
+	}
+	return nil
+}

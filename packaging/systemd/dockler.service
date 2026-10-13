@@ -1,0 +1,31 @@
+[Unit]
+Description=dockler - agentless Docker management
+After=network-online.target docker.service docker.socket podman.socket dockler-pam.socket
+Wants=network-online.target dockler-pam.socket
+
+[Service]
+Type=simple
+# Unprivileged by default. How it reaches Docker (the socket's group, the
+# owner of a rootless socket, or root) is decided by `dockler setup` in
+# dockler.service.d/10-docker-access.conf. Password checks go through the
+# socket-activated root helper (dockler-pam.socket).
+User=dockler
+Group=dockler
+Environment=DOCKLER_HOME=/var/lib/dockler
+EnvironmentFile=-/etc/dockler/dockler.env
+ExecStart=/usr/bin/dockler serve $DOCKLER_OPTS
+Restart=on-failure
+RestartSec=3
+StateDirectory=dockler
+StateDirectoryMode=0750
+NoNewPrivileges=yes
+ProtectSystem=full
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectControlGroups=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+
+[Install]
+WantedBy=multi-user.target

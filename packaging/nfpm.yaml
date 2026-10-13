@@ -1,0 +1,60 @@
+# nfpm config — built by packaging/build.sh (make packages)
+name: dockler
+arch: ${ARCH}
+platform: linux
+version: ${VERSION}
+release: 1
+section: admin
+priority: optional
+maintainer: ${MAINTAINER}
+description: |
+  Agentless Docker management: CRM-style web UI, compose stacks,
+  marketplace, terminal and live logs. Sign-in with system users (PAM)
+  and roles by POSIX groups.
+vendor: dockler
+
+depends:
+  - libpam0g
+overrides:
+  rpm:
+    depends:
+      - pam
+      # any Docker-compatible engine; how dockler reaches it is detected at install (dockler setup)
+      - (docker-ce or moby-engine or docker or docker-ee or podman-docker)
+    recommends:
+      - (docker-compose-plugin or docker-compose)
+      - openssh-clients
+  deb:
+    depends:
+      - libpam0g
+      - docker-ce | docker.io | moby-engine | docker-engine | docker-ee
+    recommends:
+      - docker-compose-plugin | docker-compose-v2
+      - openssh-client
+
+contents:
+  - src: ./dist/build/dockler-linux-${ARCH}
+    dst: /usr/bin/dockler
+    file_info: { mode: 0755 }
+  - src: ./packaging/systemd/dockler.service
+    dst: /usr/lib/systemd/system/dockler.service
+  - src: ./packaging/systemd/dockler-pam.socket
+    dst: /usr/lib/systemd/system/dockler-pam.socket
+  - src: ./packaging/systemd/dockler-pam@.service
+    dst: /usr/lib/systemd/system/dockler-pam@.service
+  - src: ./packaging/dockler.env
+    dst: /etc/dockler/dockler.env
+    type: config|noreplace
+  - src: ./packaging/pam/dockler.redhat
+    dst: /etc/pam.d/dockler
+    type: config|noreplace
+    packager: rpm
+  - src: ./packaging/pam/dockler.debian
+    dst: /etc/pam.d/dockler
+    type: config|noreplace
+    packager: deb
+
+scripts:
+  postinstall: ./packaging/scripts/postinstall.sh
+  preremove: ./packaging/scripts/preremove.sh
+  postremove: ./packaging/scripts/postremove.sh

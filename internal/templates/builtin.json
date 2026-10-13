@@ -1,0 +1,681 @@
+{
+ "version": "3",
+ "templates": [
+  {
+   "type": 1,
+   "name": "nginx",
+   "title": "Nginx",
+   "description": "High-performance web server and reverse proxy.",
+   "categories": [
+    "Web"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx.svg",
+   "image": "nginx:alpine",
+   "ports": [
+    "8080:80/tcp"
+   ],
+   "volumes": [
+    {
+     "container": "/usr/share/nginx/html",
+     "bind": "nginx-html"
+    }
+   ],
+   "env": [],
+   "restart_policy": "unless-stopped"
+  },
+  {
+   "type": 3,
+   "name": "caddy",
+   "title": "Caddy",
+   "description": "Web server with automatic HTTPS (Let's Encrypt).",
+   "categories": [
+    "Web",
+    "Proxy"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/caddy.svg",
+   "compose": "services:\n  caddy:\n    image: caddy:2-alpine\n    restart: unless-stopped\n    ports: [\"${HTTP_PORT}:80\", \"${HTTPS_PORT}:443\", \"${HTTPS_PORT}:443/udp\"]\n    volumes:\n      - ./Caddyfile:/etc/caddy/Caddyfile\n      - caddy_data:/data\n      - caddy_config:/config\nvolumes:\n  caddy_data:\n  caddy_config:\n",
+   "env": [
+    {
+     "name": "HTTP_PORT",
+     "label": "HTTP port",
+     "default": "80"
+    },
+    {
+     "name": "HTTPS_PORT",
+     "label": "HTTPS port",
+     "default": "443"
+    }
+   ],
+   "note": "Create a <code>Caddyfile</code> in the stack directory before deploying."
+  },
+  {
+   "type": 3,
+   "name": "traefik",
+   "title": "Traefik",
+   "description": "Reverse proxy and load balancer configured with Docker labels.",
+   "categories": [
+    "Proxy"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/traefik.svg",
+   "compose": "services:\n  traefik:\n    image: traefik:v3.5\n    restart: unless-stopped\n    command:\n      - --api.dashboard=true\n      - --api.insecure=true\n      - --providers.docker=true\n      - --providers.docker.exposedbydefault=false\n      - --entrypoints.web.address=:80\n      - --entrypoints.websecure.address=:443\n    ports: [\"${HTTP_PORT}:80\", \"${HTTPS_PORT}:443\", \"${DASHBOARD_PORT}:8080\"]\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock:ro\n",
+   "env": [
+    {
+     "name": "HTTP_PORT",
+     "label": "HTTP port",
+     "default": "80"
+    },
+    {
+     "name": "HTTPS_PORT",
+     "label": "HTTPS port",
+     "default": "443"
+    },
+    {
+     "name": "DASHBOARD_PORT",
+     "label": "Dashboard port",
+     "default": "8081"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "nginx-proxy-manager",
+   "title": "Nginx Proxy Manager",
+   "description": "Reverse proxy with a web UI and automatic SSL certificates.",
+   "categories": [
+    "Proxy"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nginx-proxy-manager.svg",
+   "compose": "services:\n  npm:\n    image: jc21/nginx-proxy-manager:latest\n    restart: unless-stopped\n    ports: [\"80:80\", \"443:443\", \"${ADMIN_PORT}:81\"]\n    volumes:\n      - npm_data:/data\n      - npm_letsencrypt:/etc/letsencrypt\nvolumes:\n  npm_data:\n  npm_letsencrypt:\n",
+   "env": [
+    {
+     "name": "ADMIN_PORT",
+     "label": "Admin panel port",
+     "default": "81"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "postgres",
+   "title": "PostgreSQL",
+   "description": "Open source relational database.",
+   "categories": [
+    "Databases"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/postgres.svg",
+   "compose": "services:\n  postgres:\n    image: postgres:${PG_VERSION}-alpine\n    restart: unless-stopped\n    environment:\n      POSTGRES_USER: ${POSTGRES_USER}\n      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}\n      POSTGRES_DB: ${POSTGRES_DB}\n    ports: [\"${PORT}:5432\"]\n    volumes:\n      - pgdata:/var/lib/postgresql\n    healthcheck:\n      test: [\"CMD-SHELL\", \"pg_isready -U $${POSTGRES_USER}\"]\n      interval: 10s\nvolumes:\n  pgdata:\n",
+   "env": [
+    {
+     "name": "PG_VERSION",
+     "label": "Version",
+     "default": "18",
+     "select": [
+      {
+       "text": "18",
+       "value": "18",
+       "default": true
+      },
+      {
+       "text": "17",
+       "value": "17"
+      },
+      {
+       "text": "16",
+       "value": "16"
+      }
+     ]
+    },
+    {
+     "name": "POSTGRES_USER",
+     "label": "User",
+     "default": "postgres"
+    },
+    {
+     "name": "POSTGRES_PASSWORD",
+     "label": "Password",
+     "default": ""
+    },
+    {
+     "name": "POSTGRES_DB",
+     "label": "Database",
+     "default": "app"
+    },
+    {
+     "name": "PORT",
+     "label": "Published port",
+     "default": "5432"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "mysql",
+   "title": "MySQL",
+   "description": "MySQL relational database.",
+   "categories": [
+    "Databases"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/mysql.svg",
+   "compose": "services:\n  mysql:\n    image: mysql:8.4\n    restart: unless-stopped\n    environment:\n      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD}\n      MYSQL_DATABASE: ${MYSQL_DATABASE}\n    ports: [\"${PORT}:3306\"]\n    volumes:\n      - mysql_data:/var/lib/mysql\nvolumes:\n  mysql_data:\n",
+   "env": [
+    {
+     "name": "MYSQL_ROOT_PASSWORD",
+     "label": "Root password",
+     "default": ""
+    },
+    {
+     "name": "MYSQL_DATABASE",
+     "label": "Database",
+     "default": "app"
+    },
+    {
+     "name": "PORT",
+     "label": "Published port",
+     "default": "3306"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "mariadb",
+   "title": "MariaDB",
+   "description": "Community fork of MySQL.",
+   "categories": [
+    "Databases"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/mariadb.svg",
+   "compose": "services:\n  mariadb:\n    image: mariadb:11\n    restart: unless-stopped\n    environment:\n      MARIADB_ROOT_PASSWORD: ${ROOT_PASSWORD}\n      MARIADB_DATABASE: ${DATABASE}\n    ports: [\"${PORT}:3306\"]\n    volumes:\n      - mariadb_data:/var/lib/mysql\nvolumes:\n  mariadb_data:\n",
+   "env": [
+    {
+     "name": "ROOT_PASSWORD",
+     "label": "Root password",
+     "default": ""
+    },
+    {
+     "name": "DATABASE",
+     "label": "Database",
+     "default": "app"
+    },
+    {
+     "name": "PORT",
+     "label": "Published port",
+     "default": "3306"
+    }
+   ]
+  },
+  {
+   "type": 1,
+   "name": "redis",
+   "title": "Redis",
+   "description": "In-memory key-value store.",
+   "categories": [
+    "Databases"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/redis.svg",
+   "image": "redis:8-alpine",
+   "ports": [
+    "6379:6379/tcp"
+   ],
+   "volumes": [
+    {
+     "container": "/data"
+    }
+   ],
+   "env": [],
+   "restart_policy": "unless-stopped",
+   "command": "redis-server --appendonly yes"
+  },
+  {
+   "type": 3,
+   "name": "mongodb",
+   "title": "MongoDB",
+   "description": "Document database.",
+   "categories": [
+    "Databases"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/mongodb.svg",
+   "compose": "services:\n  mongo:\n    image: mongo:8\n    restart: unless-stopped\n    environment:\n      MONGO_INITDB_ROOT_USERNAME: ${MONGO_USER}\n      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_PASSWORD}\n    ports: [\"${PORT}:27017\"]\n    volumes:\n      - mongo_data:/data/db\nvolumes:\n  mongo_data:\n",
+   "env": [
+    {
+     "name": "MONGO_USER",
+     "label": "User",
+     "default": "root"
+    },
+    {
+     "name": "MONGO_PASSWORD",
+     "label": "Password",
+     "default": ""
+    },
+    {
+     "name": "PORT",
+     "label": "Published port",
+     "default": "27017"
+    }
+   ]
+  },
+  {
+   "type": 1,
+   "name": "adminer",
+   "title": "Adminer",
+   "description": "Single-file web database manager.",
+   "categories": [
+    "Databases",
+    "Tools"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/adminer.svg",
+   "image": "adminer:latest",
+   "ports": [
+    "8082:8080/tcp"
+   ],
+   "volumes": [],
+   "env": [],
+   "restart_policy": "unless-stopped"
+  },
+  {
+   "type": 3,
+   "name": "pgadmin",
+   "title": "pgAdmin",
+   "description": "Web administration for PostgreSQL.",
+   "categories": [
+    "Databases",
+    "Tools"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pgadmin.svg",
+   "compose": "services:\n  pgadmin:\n    image: dpage/pgadmin4:latest\n    restart: unless-stopped\n    environment:\n      PGADMIN_DEFAULT_EMAIL: ${EMAIL}\n      PGADMIN_DEFAULT_PASSWORD: ${PASSWORD}\n    ports: [\"${PORT}:80\"]\n    volumes:\n      - pgadmin_data:/var/lib/pgadmin\nvolumes:\n  pgadmin_data:\n",
+   "env": [
+    {
+     "name": "EMAIL",
+     "label": "Login email",
+     "default": "admin@example.com"
+    },
+    {
+     "name": "PASSWORD",
+     "label": "Password",
+     "default": ""
+    },
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "5050"
+    }
+   ]
+  },
+  {
+   "type": 1,
+   "name": "uptime-kuma",
+   "title": "Uptime Kuma",
+   "description": "Uptime monitor with notifications.",
+   "categories": [
+    "Monitoring"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/uptime-kuma.svg",
+   "image": "louislam/uptime-kuma:2",
+   "ports": [
+    "3001:3001/tcp"
+   ],
+   "volumes": [
+    {
+     "container": "/app/data"
+    }
+   ],
+   "env": [],
+   "restart_policy": "unless-stopped"
+  },
+  {
+   "type": 3,
+   "name": "grafana",
+   "title": "Grafana + Prometheus",
+   "description": "Metrics and dashboards: Prometheus, node-exporter and Grafana.",
+   "categories": [
+    "Monitoring"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/grafana.svg",
+   "compose": "services:\n  prometheus:\n    image: prom/prometheus:latest\n    restart: unless-stopped\n    command: [\"--config.file=/etc/prometheus/prometheus.yml\"]\n    configs:\n      - source: prometheus\n        target: /etc/prometheus/prometheus.yml\n    volumes:\n      - prom_data:/prometheus\n  node-exporter:\n    image: prom/node-exporter:latest\n    restart: unless-stopped\n    pid: host\n    volumes:\n      - /:/host:ro,rslave\n    command: [\"--path.rootfs=/host\"]\n  grafana:\n    image: grafana/grafana:latest\n    restart: unless-stopped\n    environment:\n      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_PASSWORD}\n    ports: [\"${GRAFANA_PORT}:3000\"]\n    volumes:\n      - grafana_data:/var/lib/grafana\nconfigs:\n  prometheus:\n    content: |\n      global:\n        scrape_interval: 15s\n      scrape_configs:\n        - job_name: node\n          static_configs:\n            - targets: ['node-exporter:9100']\nvolumes:\n  prom_data:\n  grafana_data:\n",
+   "env": [
+    {
+     "name": "GRAFANA_PASSWORD",
+     "label": "Grafana admin password",
+     "default": "admin"
+    },
+    {
+     "name": "GRAFANA_PORT",
+     "label": "Grafana port",
+     "default": "3000"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "dozzle",
+   "title": "Dozzle",
+   "description": "Real-time container log viewer.",
+   "categories": [
+    "Monitoring"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/dozzle.svg",
+   "compose": "services:\n  dozzle:\n    image: amir20/dozzle:latest\n    restart: unless-stopped\n    ports: [\"${PORT}:8080\"]\n    volumes:\n      - /var/run/docker.sock:/var/run/docker.sock:ro\n",
+   "env": [
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "8888"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "gitea",
+   "title": "Gitea",
+   "description": "Lightweight self-hosted Git server.",
+   "categories": [
+    "Development"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/gitea.svg",
+   "compose": "services:\n  gitea:\n    image: gitea/gitea:latest\n    restart: unless-stopped\n    environment:\n      USER_UID: \"1000\"\n      USER_GID: \"1000\"\n    ports: [\"${HTTP_PORT}:3000\", \"${SSH_PORT}:22\"]\n    volumes:\n      - gitea_data:/data\nvolumes:\n  gitea_data:\n",
+   "env": [
+    {
+     "name": "HTTP_PORT",
+     "label": "Web port",
+     "default": "3000"
+    },
+    {
+     "name": "SSH_PORT",
+     "label": "SSH port",
+     "default": "2222"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "registry",
+   "title": "Docker Registry",
+   "description": "Private Docker image registry.",
+   "categories": [
+    "Development"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/docker.svg",
+   "compose": "services:\n  registry:\n    image: registry:3\n    restart: unless-stopped\n    ports: [\"${PORT}:5000\"]\n    volumes:\n      - registry_data:/var/lib/registry\nvolumes:\n  registry_data:\n",
+   "env": [
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "5000"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "vaultwarden",
+   "title": "Vaultwarden",
+   "description": "Lightweight Bitwarden-compatible server.",
+   "categories": [
+    "Security"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/vaultwarden.svg",
+   "compose": "services:\n  vaultwarden:\n    image: vaultwarden/server:latest\n    restart: unless-stopped\n    environment:\n      DOMAIN: ${DOMAIN}\n      SIGNUPS_ALLOWED: ${SIGNUPS_ALLOWED}\n    ports: [\"${PORT}:80\"]\n    volumes:\n      - vw_data:/data\nvolumes:\n  vw_data:\n",
+   "env": [
+    {
+     "name": "DOMAIN",
+     "label": "Public URL",
+     "default": "https://vault.example.com"
+    },
+    {
+     "name": "SIGNUPS_ALLOWED",
+     "label": "Allow sign-ups",
+     "default": "true",
+     "select": [
+      {
+       "text": "Yes",
+       "value": "true",
+       "default": true
+      },
+      {
+       "text": "No",
+       "value": "false"
+      }
+     ]
+    },
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "8222"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "n8n",
+   "title": "n8n",
+   "description": "Workflow automation.",
+   "categories": [
+    "Automation"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/n8n.svg",
+   "compose": "services:\n  n8n:\n    image: docker.n8n.io/n8nio/n8n:latest\n    restart: unless-stopped\n    environment:\n      GENERIC_TIMEZONE: ${TZ}\n      N8N_SECURE_COOKIE: \"false\"\n    ports: [\"${PORT}:5678\"]\n    volumes:\n      - n8n_data:/home/node/.n8n\nvolumes:\n  n8n_data:\n",
+   "env": [
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Etc/UTC"
+    },
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "5678"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "minio",
+   "title": "MinIO",
+   "description": "S3-compatible object storage.",
+   "categories": [
+    "Storage"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/minio.svg",
+   "compose": "services:\n  minio:\n    image: minio/minio:latest\n    restart: unless-stopped\n    command: server /data --console-address \":9001\"\n    environment:\n      MINIO_ROOT_USER: ${ROOT_USER}\n      MINIO_ROOT_PASSWORD: ${ROOT_PASSWORD}\n    ports: [\"${API_PORT}:9000\", \"${CONSOLE_PORT}:9001\"]\n    volumes:\n      - minio_data:/data\nvolumes:\n  minio_data:\n",
+   "env": [
+    {
+     "name": "ROOT_USER",
+     "label": "User",
+     "default": "minioadmin"
+    },
+    {
+     "name": "ROOT_PASSWORD",
+     "label": "Password (min. 8)",
+     "default": ""
+    },
+    {
+     "name": "API_PORT",
+     "label": "API port",
+     "default": "9000"
+    },
+    {
+     "name": "CONSOLE_PORT",
+     "label": "Console port",
+     "default": "9001"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "nextcloud",
+   "title": "Nextcloud",
+   "description": "Personal cloud: files, calendar and contacts.",
+   "categories": [
+    "Storage",
+    "Productivity"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/nextcloud.svg",
+   "compose": "services:\n  db:\n    image: mariadb:11\n    restart: unless-stopped\n    environment:\n      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD}\n      MARIADB_DATABASE: nextcloud\n      MARIADB_USER: nextcloud\n      MARIADB_PASSWORD: ${DB_PASSWORD}\n    volumes:\n      - db:/var/lib/mysql\n  app:\n    image: nextcloud:latest\n    restart: unless-stopped\n    depends_on: [db]\n    environment:\n      MYSQL_HOST: db\n      MYSQL_DATABASE: nextcloud\n      MYSQL_USER: nextcloud\n      MYSQL_PASSWORD: ${DB_PASSWORD}\n    ports: [\"${PORT}:80\"]\n    volumes:\n      - nextcloud:/var/www/html\nvolumes:\n  db:\n  nextcloud:\n",
+   "env": [
+    {
+     "name": "DB_PASSWORD",
+     "label": "Database password",
+     "default": ""
+    },
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "8080"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "wordpress",
+   "title": "WordPress",
+   "description": "WordPress with MariaDB.",
+   "categories": [
+    "Web",
+    "CMS"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/wordpress.svg",
+   "compose": "services:\n  db:\n    image: mariadb:11\n    restart: unless-stopped\n    environment:\n      MARIADB_ROOT_PASSWORD: ${DB_PASSWORD}\n      MARIADB_DATABASE: wordpress\n      MARIADB_USER: wordpress\n      MARIADB_PASSWORD: ${DB_PASSWORD}\n    volumes:\n      - db:/var/lib/mysql\n  wordpress:\n    image: wordpress:latest\n    restart: unless-stopped\n    depends_on: [db]\n    environment:\n      WORDPRESS_DB_HOST: db\n      WORDPRESS_DB_USER: wordpress\n      WORDPRESS_DB_PASSWORD: ${DB_PASSWORD}\n      WORDPRESS_DB_NAME: wordpress\n    ports: [\"${PORT}:80\"]\n    volumes:\n      - wp:/var/www/html\nvolumes:\n  db:\n  wp:\n",
+   "env": [
+    {
+     "name": "DB_PASSWORD",
+     "label": "Database password",
+     "default": ""
+    },
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "8080"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "home-assistant",
+   "title": "Home Assistant",
+   "description": "Home automation.",
+   "categories": [
+    "Home automation"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/home-assistant.svg",
+   "compose": "services:\n  homeassistant:\n    image: ghcr.io/home-assistant/home-assistant:stable\n    restart: unless-stopped\n    network_mode: host\n    privileged: true\n    environment:\n      TZ: ${TZ}\n    volumes:\n      - ha_config:/config\n      - /run/dbus:/run/dbus:ro\nvolumes:\n  ha_config:\n",
+   "env": [
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Etc/UTC"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "pi-hole",
+   "title": "Pi-hole",
+   "description": "DNS-level ad blocker.",
+   "categories": [
+    "Network"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/pi-hole.svg",
+   "compose": "services:\n  pihole:\n    image: pihole/pihole:latest\n    restart: unless-stopped\n    environment:\n      TZ: ${TZ}\n      FTLCONF_webserver_api_password: ${PASSWORD}\n    ports: [\"53:53/tcp\", \"53:53/udp\", \"${WEB_PORT}:80\"]\n    volumes:\n      - pihole:/etc/pihole\nvolumes:\n  pihole:\n",
+   "env": [
+    {
+     "name": "TZ",
+     "label": "Time zone",
+     "default": "Etc/UTC"
+    },
+    {
+     "name": "PASSWORD",
+     "label": "Web password",
+     "default": ""
+    },
+    {
+     "name": "WEB_PORT",
+     "label": "Web port",
+     "default": "8053"
+    }
+   ]
+  },
+  {
+   "type": 3,
+   "name": "jellyfin",
+   "title": "Jellyfin",
+   "description": "Free media server.",
+   "categories": [
+    "Multimedia"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/jellyfin.svg",
+   "compose": "services:\n  jellyfin:\n    image: jellyfin/jellyfin:latest\n    restart: unless-stopped\n    ports: [\"${PORT}:8096\"]\n    volumes:\n      - jf_config:/config\n      - jf_cache:/cache\n      - ${MEDIA_PATH}:/media:ro\nvolumes:\n  jf_config:\n  jf_cache:\n",
+   "env": [
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "8096"
+    },
+    {
+     "name": "MEDIA_PATH",
+     "label": "Library path on the host",
+     "default": "/srv/media"
+    }
+   ]
+  },
+  {
+   "type": 1,
+   "name": "mailpit",
+   "title": "Mailpit",
+   "description": "Testing SMTP server with a web inbox.",
+   "categories": [
+    "Development"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/mailpit.svg",
+   "image": "axllent/mailpit:latest",
+   "ports": [
+    "8025:8025/tcp",
+    "1025:1025/tcp"
+   ],
+   "volumes": [],
+   "env": [],
+   "restart_policy": "unless-stopped"
+  },
+  {
+   "type": 3,
+   "name": "ollama",
+   "title": "Ollama + Open WebUI",
+   "description": "Local LLMs with a chat interface.",
+   "categories": [
+    "AI"
+   ],
+   "platform": "linux",
+   "logo": "https://cdn.jsdelivr.net/gh/homarr-labs/dashboard-icons/svg/ollama.svg",
+   "compose": "services:\n  ollama:\n    image: ollama/ollama:latest\n    restart: unless-stopped\n    volumes:\n      - ollama:/root/.ollama\n  open-webui:\n    image: ghcr.io/open-webui/open-webui:main\n    restart: unless-stopped\n    depends_on: [ollama]\n    environment:\n      OLLAMA_BASE_URL: http://ollama:11434\n    ports: [\"${PORT}:8080\"]\n    volumes:\n      - open-webui:/app/backend/data\nvolumes:\n  ollama:\n  open-webui:\n",
+   "env": [
+    {
+     "name": "PORT",
+     "label": "Port",
+     "default": "3000"
+    }
+   ]
+  }
+ ]
+}
