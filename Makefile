@@ -2,7 +2,8 @@ VERSION ?= $(shell git describe --tags --always --dirty 2>/dev/null || echo dev)
 LDFLAGS := -s -w -X main.version=$(VERSION)
 PLATFORMS := linux/amd64 linux/arm64 linux/arm darwin/amd64 darwin/arm64 windows/amd64
 
-PKG_VERSION ?= 0.1.0
+# from the latest tag (v1.2.3 -> 1.2.3); override with PKG_VERSION=x.y.z
+PKG_VERSION ?= $(or $(patsubst v%,%,$(shell git describe --tags --abbrev=0 2>/dev/null)),0.1.0)
 MAINTAINER ?= dockera <dockera@localhost>
 
 .DEFAULT_GOAL := help

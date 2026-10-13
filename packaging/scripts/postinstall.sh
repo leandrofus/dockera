@@ -30,12 +30,24 @@ chmod 0400 /etc/dockera/secret.key
 # group, rootless, root-only): detect it instead of assuming a docker group.
 /usr/bin/dockera setup --no-restart --quiet || echo "warning: could not detect Docker; run \`sudo dockera setup\` once it is installed" >&2
 
+upgrade=
+if [ "$1" = "2" ] || { [ "$1" = "configure" ] && [ -n "${2:-}" ]; }; then
+	upgrade=1
+fi
+
 if [ -d /run/systemd/system ]; then
 	systemctl daemon-reload >/dev/null 2>&1 || true
-	systemctl enable dockera-pam.socket dockera.service >/dev/null 2>&1 || true
-	systemctl restart dockera-pam.socket >/dev/null 2>&1 || true
-	systemctl restart dockera.service >/dev/null 2>&1 || true
+	if [ -n "$upgrade" ]; then
+		# keep the admin's choice: only restart what is already running
+		systemctl try-restart dockera-pam.socket dockera.service >/dev/null 2>&1 || true
+	else
+		systemctl enable dockera-pam.socket dockera.service >/dev/null 2>&1 || true
+		systemctl restart dockera-pam.socket >/dev/null 2>&1 || true
+		systemctl restart dockera.service >/dev/null 2>&1 || true
+	fi
 fi
+
+[ -n "$upgrade" ] && exit 0
 
 cat <<'MSG'
 
