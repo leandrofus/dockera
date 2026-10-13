@@ -7,6 +7,7 @@ import { useResource, invalidate } from '../lib/store'
 import { copy, dateTime } from '../lib/format'
 import { isViewer } from '../lib/session'
 import { AccessSettings } from './AccessSettings'
+import { CloudflareSettings } from '../components/Expose'
 import { go } from '../lib/router'
 import { Empty, Spinner, Tabs, Tag } from '../ui/common'
 import { useMenu } from '../ui/ContextMenu'
@@ -427,6 +428,7 @@ export function Settings({ ep, tab = 'hosts' }: { ep: string; tab?: string }) {
           { id: 'hosts', label: tr('Hosts') },
           { id: 'access', label: tr('Access') },
           { id: 'registries', label: 'Registries' },
+          { id: 'cloudflare', label: 'Cloudflare' },
           { id: 'audit', label: tr('Audit') },
           { id: 'marketplace', label: 'Marketplace' },
         ]}
@@ -438,6 +440,7 @@ export function Settings({ ep, tab = 'hosts' }: { ep: string; tab?: string }) {
         {tab === 'audit' && !isViewer() && <Audit />}
         {!isViewer() && tab === 'registries' && <Registries ep={ep} />}
         {!isViewer() && tab === 'marketplace' && <Sources />}
+        {!isViewer() && tab === 'cloudflare' && <CloudflareSettings />}
       </div>
     </div>
   )

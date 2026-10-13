@@ -69,20 +69,27 @@ type listedContainer struct {
 }
 
 func (s *Server) jump(w http.ResponseWriter, r *http.Request) {
-	c, err := s.ep(r)
+	out, err := s.jumpEntries(r.Context(), r.PathValue("ep"), sessionFrom(r.Context()).Role == auth.RoleAdmin)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	var list []listedContainer
-	if err := c.Get(r.Context(), "/containers/json", nil, &list); err != nil {
-		writeErr(w, err)
-		return
-	}
-	admin := sessionFrom(r.Context()).Role == auth.RoleAdmin
-	envs := s.containerEnvs(r.Context(), c, list)
+	writeJSON(w, out)
+}
 
-	tgt := s.jumpTarget(r.PathValue("ep"))
+// jumpEntries lists and classifies the ports of the running containers.
+func (s *Server) jumpEntries(ctx context.Context, epName string, admin bool) (*jumpResponse, error) {
+	c, err := s.Client(epName)
+	if err != nil {
+		return nil, err
+	}
+	var list []listedContainer
+	if err := c.Get(ctx, "/containers/json", nil, &list); err != nil {
+		return nil, err
+	}
+	envs := s.containerEnvs(ctx, c, list)
+
+	tgt := s.jumpTarget(epName)
 	out := jumpResponse{Host: tgt.host, Via: tgt.via, Tunnel: tgt.dial != nil, Entries: []jumpEntry{}}
 	for _, ct := range list {
 		seen := map[string]bool{}
@@ -121,7 +128,7 @@ func (s *Server) jump(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	if tgt.dial != nil {
-		probeUnknown(r.Context(), r.PathValue("ep"), out.Entries, tgt)
+		probeUnknown(ctx, epName, out.Entries, tgt)
 	}
 	sort.SliceStable(out.Entries, func(i, j int) bool {
 		a, b := out.Entries[i], out.Entries[j]
@@ -133,7 +140,7 @@ func (s *Server) jump(w http.ResponseWriter, r *http.Request) {
 		}
 		return a.Port < b.Port
 	})
-	writeJSON(w, out)
+	return &out, nil
 }
 
 func first(s []string) string {

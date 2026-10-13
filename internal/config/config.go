@@ -69,6 +69,61 @@ func (r Registry) For(endpoint string) bool {
 	return false
 }
 
+// Cloudflare is the account used for tunnels on your own domains. The API
+// token and the tunnel token are sealed on disk.
+type Cloudflare struct {
+	APIToken    string `json:"api_token,omitempty"`
+	AccountID   string `json:"account_id,omitempty"`
+	AccountName string `json:"account_name,omitempty"`
+	TunnelID    string `json:"tunnel_id,omitempty"`
+	TunnelName  string `json:"tunnel_name,omitempty"`
+	TunnelToken string `json:"tunnel_token,omitempty"`
+}
+
+// ExposeAccess decides who reaches an exposed port. Empty means public.
+// IPs must match (when set) and then a login or the secret link is needed
+// (when either is enabled).
+type ExposeAccess struct {
+	IPs    []string `json:"ips,omitempty"` // IPs, CIDRs or hostnames
+	Login  bool     `json:"login,omitempty"`
+	Users  []string `json:"users,omitempty"`  // with Login: these users…
+	Groups []string `json:"groups,omitempty"` // …or members of these groups (none: any ducktainer user)
+	// LinkKey grants access to whoever opens the link carrying it (sealed).
+	LinkKey string `json:"link_key,omitempty"`
+}
+
+// Exposure publishes a container port on the internet through Cloudflare:
+// a quick tunnel (random trycloudflare.com address, no account) or a
+// hostname of the account's named tunnel.
+type Exposure struct {
+	ID        string       `json:"id"`
+	Kind      string       `json:"kind"` // quick | domain
+	Endpoint  string       `json:"endpoint"`
+	Container string       `json:"container"` // name, so it survives a recreate
+	Port      int          `json:"port"`      // container port
+	Scheme    string       `json:"scheme,omitempty"`
+	Hostname  string       `json:"hostname,omitempty"` // domain
+	ZoneID    string       `json:"zone_id,omitempty"`
+	DNSRecord string       `json:"dns_record,omitempty"`
+	Access    ExposeAccess `json:"access"`
+	Expires   *time.Time   `json:"expires,omitempty"`
+	User      string       `json:"user"`
+	Created   time.Time    `json:"created"`
+}
+
+// ShortcutRef is a container web port with an entry in the start menu.
+type ShortcutRef struct {
+	Endpoint  string `json:"endpoint"`
+	Container string `json:"container"` // name, so it survives a recreate
+	Port      int    `json:"port"`      // container port
+}
+
+// Shortcuts: start menu entries on the machine running ducktainer.
+type Shortcuts struct {
+	All   bool          `json:"all,omitempty"` // every published web port of this machine's containers
+	Items []ShortcutRef `json:"items,omitempty"`
+}
+
 type TemplateSource struct {
 	Name    string `json:"name"`
 	URL     string `json:"url"`
@@ -117,6 +172,9 @@ type Config struct {
 	Endpoints     []Endpoint       `json:"endpoints"`
 	Registry      []Registry       `json:"registries"`
 	Templates     []TemplateSource `json:"template_sources"`
+	Cloudflare    *Cloudflare      `json:"cloudflare,omitempty"`
+	Exposures     []Exposure       `json:"exposures,omitempty"`
+	Shortcuts     *Shortcuts       `json:"shortcuts,omitempty"`
 
 	mu       sync.Mutex
 	path     string
@@ -227,7 +285,21 @@ func (c *Config) decode(data []byte) error {
 			return err
 		}
 	}
+	if cf := o.Cloudflare; cf != nil {
+		if cf.APIToken, err = open(cf.APIToken); err != nil {
+			return err
+		}
+		if cf.TunnelToken, err = open(cf.TunnelToken); err != nil {
+			return err
+		}
+	}
+	for i := range o.Exposures {
+		if o.Exposures[i].Access.LinkKey, err = open(o.Exposures[i].Access.LinkKey); err != nil {
+			return err
+		}
+	}
 	c.TokenHash, c.SessionSecret, c.Auth = o.TokenHash, o.SessionSecret, o.Auth
+	c.Cloudflare, c.Exposures, c.Shortcuts = o.Cloudflare, o.Exposures, o.Shortcuts
 	c.Allow, c.Endpoints, c.Registry, c.Templates = o.Allow, o.Endpoints, o.Registry, o.Templates
 	if o.LegacyToken != "" {
 		c.SetToken(o.LegacyToken)
@@ -284,6 +356,19 @@ func (c *Config) save() error {
 	}
 	for i := range disk.Registry {
 		if disk.Registry[i].Password, err = seal(c.key, disk.Registry[i].Password); err != nil {
+			return err
+		}
+	}
+	if cf := disk.Cloudflare; cf != nil {
+		if cf.APIToken, err = seal(c.key, cf.APIToken); err != nil {
+			return err
+		}
+		if cf.TunnelToken, err = seal(c.key, cf.TunnelToken); err != nil {
+			return err
+		}
+	}
+	for i := range disk.Exposures {
+		if disk.Exposures[i].Access.LinkKey, err = seal(c.key, disk.Exposures[i].Access.LinkKey); err != nil {
 			return err
 		}
 	}
@@ -374,7 +459,26 @@ func (c *Config) clone() *Config {
 		x := *c.Auth
 		a = &x
 	}
+	var cf *Cloudflare
+	if c.Cloudflare != nil {
+		x := *c.Cloudflare
+		cf = &x
+	}
+	xs := make([]Exposure, len(c.Exposures))
+	for i, x := range c.Exposures {
+		x.Access.IPs = append([]string(nil), x.Access.IPs...)
+		x.Access.Users = append([]string(nil), x.Access.Users...)
+		x.Access.Groups = append([]string(nil), x.Access.Groups...)
+		xs[i] = x
+	}
+	var sc *Shortcuts
+	if c.Shortcuts != nil {
+		sc = &Shortcuts{All: c.Shortcuts.All, Items: append([]ShortcutRef(nil), c.Shortcuts.Items...)}
+	}
 	return &Config{
+		Shortcuts:     sc,
+		Cloudflare:    cf,
+		Exposures:     xs,
 		TokenHash:     c.TokenHash,
 		SessionSecret: c.SessionSecret,
 		Auth:          a,

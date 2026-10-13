@@ -49,6 +49,7 @@ type Server struct {
 	roles   sync.Map // user -> cachedRole
 	audit   *auditLog
 	tunnels tunnels
+	expo    exposures
 }
 
 func New(cfg *config.Config, acl *access.List, ui fs.FS) *Server {

@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="14 10 174 120" role="img" aria-label="ducktainer">
+<title>ducktainer</title>
+  <g stroke="#123E6B" stroke-width="4" stroke-linejoin="round" stroke-linecap="round">
+    <rect x="30" y="50" width="20" height="22" fill="#2E86C8"/>
+    <rect x="52" y="56" width="18" height="16" fill="#1F6FB0"/>
+    <path d="M168 24 V50 M161 32 H175" fill="none"/>
+    <path d="M148 52 H184 V62 H176 V72 H156 V62 H148 Z" fill="#C3D8E8"/>
+    <rect x="26" y="72" width="44" height="22" fill="#2E86C8"/>
+    <rect x="70" y="72" width="60" height="22" fill="#1F6FB0"/>
+    <rect x="130" y="72" width="44" height="22" fill="#2E86C8"/>
+    <path d="M70 44 C76 50 86 53 97 51 C93 44 92 38 94 32 C97 20 108 13 119 14 C131 15 138 24 137 34 C136 40 133 44 128 47 C140 50 146 60 144 70 C141 82 126 86 106 86 C86 86 72 80 69 68 C67 60 67 50 70 44 Z" fill="#F6C21C"/>
+    <path d="M134 29 C142 27 153 29 157 34 C154 39 146 41 137 41 C140 37 139 33 134 29 Z" fill="#F28C1B"/>
+    <path d="M90 60 C97 54 111 55 117 60 C113 70 101 74 89 70 C92 67 92 63 90 60 Z" fill="#E9A912" stroke-width="3"/>
+    <path d="M18 94 H182 L174 122 C172 127 169 128 164 128 H36 C31 128 28 127 26 122 Z" fill="#1F6FB0"/>
+  </g>
+  <circle cx="123" cy="27" r="3.6" fill="#123E6B"/>
+  <g stroke="#123E6B" stroke-width="2" opacity=".55" stroke-linecap="round">
+    <path d="M34 77 V89 M40 77 V89 M46 77 V89 M52 77 V89 M58 77 V89 M64 77 V89"/>
+    <path d="M138 77 V89 M144 77 V89 M150 77 V89 M156 77 V89 M162 77 V89 M168 77 V89"/>
+    <path d="M36 55 V67 M44 55 V67"/>
+    <path d="M28 104 H172"/>
+    <path d="M60 104 V124 M100 104 V124 M140 104 V124"/>
+  </g>
+</svg>

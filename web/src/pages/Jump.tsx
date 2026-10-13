@@ -1,6 +1,6 @@
 import { t } from '../i18n'
 import { useMemo, useState } from 'react'
-import { Zap, Globe, Plug, Search, X, Pencil, Copy, ExternalLink, Server, Lock, EyeOff, ArrowLeftRight } from 'lucide-react'
+import { Zap, Globe, Plug, Search, X, Pencil, Copy, ExternalLink, Server, Lock, EyeOff, ArrowLeftRight, Cloud, AppWindow } from 'lucide-react'
 import { api, enc } from '../lib/api'
 import { invalidate, useResource } from '../lib/store'
 import { usePref } from '../lib/prefs'
@@ -11,6 +11,9 @@ import { useMenu } from '../ui/ContextMenu'
 import type { MenuEntry } from '../ui/ContextMenu'
 import { prompt, toast } from '../ui/overlays'
 import { isViewer } from '../lib/session'
+import { ExposureList, accessSummary, exposureMenu, openExpose } from '../components/Expose'
+import type { Exposure } from '../components/Expose'
+import { toggleShortcut, useShortcuts } from '../components/Shortcuts'
 
 interface JumpEntry {
   container_id: string
@@ -87,13 +90,15 @@ function Owner({ e }: { e: JumpEntry }) {
 
 export function Jump({ ep }: { ep: string }) {
   const { data, loading, error } = useResource<JumpData>(`/e/${enc(ep)}/jump`, { poll: 30000 })
-  const [tab, setTab] = usePref<'http' | 'tcp'>('jump.tab', 'http')
+  const [tab, setTab] = usePref<'http' | 'tcp' | 'internet'>('jump.tab', 'http')
   const [internal, setInternal] = usePref('jump.internal', false)
   const [hosts, setHosts] = usePref<Record<string, string>>('jump.hosts', {})
   const [links, setLinks] = usePref<Record<string, string>>('jump.links', {})
   const [q, setQ] = useState('')
   const [opening, setOpening] = useState<string | null>(null)
   const { data: tunnels } = useResource<Tunnel[]>('/tunnels', { poll: 30000 })
+  const { data: exposures } = useResource<Exposure[]>('/exposures', { poll: 30000 })
+  const { data: menuData } = useShortcuts()
   const menu = useMenu()
 
   // behind an agent the node's address is unknown unless it connected from a
@@ -115,6 +120,7 @@ export function Jump({ ep }: { ep: string }) {
   const urlOf = (e: JumpEntry) => links[linkKey(ep, e)] || defaultURL(e, host)
   const ekey = (e: JumpEntry) => e.container_id + ':' + e.port + '/' + e.proto
   const tunOf = (e: JumpEntry) => tunnels?.find((x) => x.endpoint === ep && x.container_id === e.container_id && x.port === e.port)
+  const exposedOf = (e: JumpEntry) => (exposures || []).filter((x) => x.endpoint === ep && x.container === e.container && x.port === e.port)
   const canTunnel = !!data?.tunnel && !isViewer()
   // Nodes behind an agent (often NAT) and internal ports are reached through
   // a tunnel unless someone set a link by hand.
@@ -191,6 +197,21 @@ export function Jump({ ep }: { ep: string }) {
       tn && { label: t('Close tunnel :{0}', tn.local_port), danger: true, onClick: () => closeTunnel(tn) },
     ]
   }
+  const exposeMenu = (e: JumpEntry): MenuEntry[] => {
+    const xs = exposedOf(e)
+    return [
+      canTunnel && 'sep',
+      canTunnel && { label: t('Expose to the internet…'), icon: <Cloud size={14} />, onClick: () => openExpose(ep, e.container, e.port, e.scheme) },
+      ...xs.map((x) => ({ label: x.hostname || x.url || t('Exposed'), icon: <Globe size={14} />, submenu: exposureMenu(x) }) as MenuEntry),
+    ]
+  }
+  // start menu entries: published web ports of this machine's containers
+  const shortcutMenu = (e: JumpEntry): MenuEntry[] => {
+    const c = menuData?.info.supported && e.public_port ? menuData.candidates.find((x) => x.endpoint === ep && x.container === e.container && x.port === e.port) : undefined
+    if (!c || !menuData) return []
+    if (menuData.all) return ['sep', { label: t('In the start menu (all containers)'), icon: <AppWindow size={14} />, disabled: true }]
+    return ['sep', { label: c.on ? t('Remove from the start menu') : t('Add to the start menu'), icon: <AppWindow size={14} />, onClick: () => toggleShortcut(menuData, c, !c.on) }]
+  }
   const httpMenu = (e: JumpEntry): MenuEntry[] => [
     { header: `${e.service || e.container}:${e.port}` },
     { label: t('Open in a new tab'), icon: <ExternalLink size={14} />, onClick: () => (preferTunnel(e) ? openViaTunnel(e) : window.open(urlOf(e), '_blank', 'noopener')) },
@@ -199,6 +220,8 @@ export function Jump({ ep }: { ep: string }) {
     { label: t('Edit link…'), icon: <Pencil size={14} />, onClick: () => editLink(e) },
     links[linkKey(ep, e)] && { label: t('Reset link'), onClick: () => resetLink(e) },
     ...tunnelMenu(e),
+    ...exposeMenu(e),
+    ...shortcutMenu(e),
     ...common(e),
   ]
   const tcpMenu = (e: JumpEntry): MenuEntry[] => {
@@ -242,10 +265,11 @@ export function Jump({ ep }: { ep: string }) {
       </div>
       <Tabs
         active={tab}
-        onChange={(id) => setTab(id as 'http' | 'tcp')}
+        onChange={(id) => setTab(id as 'http' | 'tcp' | 'internet')}
         tabs={[
           { id: 'http', label: <><Globe size={13} /> HTTP</>, count: http.length },
           { id: 'tcp', label: <><Plug size={13} /> TCP/UDP</>, count: tcp.length },
+          { id: 'internet', label: <><Cloud size={13} /> {t('Internet')}</>, count: (exposures || []).filter((x) => x.endpoint === ep).length },
         ]}
       />
       <div className="page-body">
@@ -288,6 +312,11 @@ export function Jump({ ep }: { ep: string }) {
                         {custom && <Tag tone="accent">{t('custom')}</Tag>}
                         {tn && <Tag tone="ok" title={t('Tunnel open: only your address can use it; it closes after 30 min without connections')}>{t('tunnel :{0}', tn.local_port)}</Tag>}
                         {!custom && e.url && <Tag tone="accent">{t('label')}</Tag>}
+                        {exposedOf(e).map((x) => (
+                          <Tag key={x.id} tone={x.access.login || x.has_link || x.access.ips?.length ? 'ok' : 'warn'} title={`${x.url || t('waiting for an address…')} · ${accessSummary(x)}`} onContextMenu={menu(() => exposureMenu(x))}>
+                            <Cloud size={11} /> {x.hostname || t('internet')}
+                          </Tag>
+                        ))}
                         {!e.public_port && <Tag>{t('internal')}</Tag>}
                         {isLoopback(e.host_ip) && <Tag tone="warn" title={t('Published only on the loopback of the host')}>localhost</Tag>}
                       </span>
@@ -301,6 +330,7 @@ export function Jump({ ep }: { ep: string }) {
             </div>
           )
         )}
+        {tab === 'internet' && <ExposureList ep={ep} />}
         {data && tab === 'tcp' && (
           tcp.length === 0 ? (
             <Empty icon={<Plug size={28} />} title={t('No TCP/UDP ports')}>{q ? t('Nothing matches the search.') : t('No running container publishes a non-web port.')}</Empty>

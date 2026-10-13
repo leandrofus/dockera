@@ -33,6 +33,14 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/templates/compose", s.auth(s.templateCompose))
 	mux.HandleFunc("GET /api/tunnels", s.auth(s.listTunnels))
 	mux.HandleFunc("DELETE /api/tunnels/{id}", s.admin(s.closeTunnel))
+	mux.HandleFunc("GET /api/exposures", s.auth(s.listExposures))
+	mux.HandleFunc("PUT /api/exposures/{id}/access", s.admin(s.updateExposureAccess))
+	mux.HandleFunc("DELETE /api/exposures/{id}", s.admin(s.deleteExposure))
+	mux.HandleFunc("GET /api/shortcuts", s.admin(s.shortcutsInfo))
+	mux.HandleFunc("PUT /api/shortcuts", s.admin(s.putShortcuts))
+	mux.HandleFunc("GET /api/cloudflare", s.admin(s.cloudflareInfo))
+	mux.HandleFunc("PUT /api/cloudflare", s.admin(s.connectCloudflare))
+	mux.HandleFunc("DELETE /api/cloudflare", s.admin(s.disconnectCloudflare))
 
 	e := func(pattern string, h http.HandlerFunc) {
 		method, path, _ := cut(pattern)
@@ -86,6 +94,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 
 	e("GET /jump", s.jump)
 	e("POST /tunnels", s.openTunnel)
+	e("POST /exposures", s.createExposure)
 
 	e("GET /stacks", s.listStacks)
 	e("POST /stacks", s.createStack)

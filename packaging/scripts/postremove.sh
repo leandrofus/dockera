@@ -3,6 +3,13 @@
 if [ -d /run/systemd/system ]; then
 	systemctl daemon-reload >/dev/null 2>&1 || true
 fi
+# start menu entries (deb: remove|purge · rpm: 0 = erase, not upgrade)
+if [ "$1" = "remove" ] || [ "$1" = "purge" ] || [ "$1" = "0" ]; then
+	rm -rf /usr/local/share/applications/ducktainer-containers
+	rm -f /etc/xdg/menus/applications-merged/ducktainer-containers.menu \
+		/usr/local/share/desktop-directories/ducktainer-containers.directory \
+		/usr/local/share/icons/hicolor/scalable/apps/ducktainer.svg
+fi
 if [ "$1" = "purge" ]; then
 	rm -rf /var/lib/ducktainer
 	userdel ducktainer >/dev/null 2>&1 || true
