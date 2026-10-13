@@ -14,7 +14,7 @@ export function parse(hash = location.hash): Route {
   const parts = path.split('/').filter(Boolean).map(decodeURIComponent)
   return {
     ep: parts[0] || '',
-    section: parts[1] || 'home',
+    section: parts[1] || 'jump',
     id: parts[2],
     tab: parts[3],
     query: new URLSearchParams(qs || ''),

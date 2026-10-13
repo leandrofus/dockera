@@ -64,6 +64,7 @@ type inspect struct {
 	Mounts          []rawMount                 `json:"Mounts"`
 	NetworkSettings struct {
 		Networks map[string]struct {
+			IPAddress  string   `json:"IPAddress"`
 			Aliases    []string `json:"Aliases"`
 			IPAMConfig *struct {
 				IPv4Address string `json:"IPv4Address"`

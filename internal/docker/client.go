@@ -1,5 +1,5 @@
 // Package docker is a small Docker Engine API client. It speaks HTTP directly
-// over a unix socket, TCP(+TLS) to a `dockler expose` proxy, or SSH using
+// over a unix socket, TCP(+TLS) to a `dockera expose` proxy, or SSH using
 // `docker system dial-stdio` on the remote host, so nothing has to be
 // installed there besides Docker itself.
 package docker
@@ -11,7 +11,7 @@ import (
 	"crypto/sha256"
 	"crypto/tls"
 	"crypto/x509"
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"encoding/binary"
 	"encoding/hex"
 	"encoding/json"
@@ -25,8 +25,8 @@ import (
 	"strings"
 	"time"
 
-	"dockler/internal/agent"
-	"dockler/internal/config"
+	"dockera/internal/agent"
+	"dockera/internal/config"
 )
 
 type Client struct {

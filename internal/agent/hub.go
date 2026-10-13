@@ -2,7 +2,7 @@ package agent
 
 import (
 	"context"
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"net"
 	"sync"
 	"time"
@@ -14,14 +14,16 @@ import (
 type Hub struct {
 	mu       sync.RWMutex
 	sessions map[string]*yamux.Session
+	addrs    map[string]string // address each agent connected from
 }
 
-// DefaultHub is the singleton agent hub used by the dockler server and client.
+// DefaultHub is the singleton agent hub used by the dockera server and client.
 var DefaultHub = NewHub()
 
 func NewHub() *Hub {
 	return &Hub{
 		sessions: make(map[string]*yamux.Session),
+		addrs:    make(map[string]string),
 	}
 }
 
@@ -34,6 +36,21 @@ func (h *Hub) Register(name string, s *yamux.Session) {
 		_ = prev.Close()
 	}
 	h.sessions[name] = s
+}
+
+// SetAddr records the address an agent connected from: a good default for
+// reaching its published ports, unless it sits behind NAT.
+func (h *Hub) SetAddr(name, addr string) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.addrs[name] = addr
+}
+
+// Addr returns the address recorded by SetAddr.
+func (h *Hub) Addr(name string) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return h.addrs[name]
 }
 
 // Unregister removes the session if it matches the current one for name.

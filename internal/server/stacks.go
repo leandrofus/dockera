@@ -2,7 +2,7 @@ package server
 
 import (
 	"context"
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -16,8 +16,8 @@ import (
 	"strings"
 	"sync"
 
-	"dockler/internal/compose"
-	"dockler/internal/docker"
+	"dockera/internal/compose"
+	"dockera/internal/docker"
 )
 
 const (
@@ -143,7 +143,7 @@ func editable(st *stackInfo, local bool, lang string) (bool, string) {
 	case st.Managed:
 		return true, ""
 	case !local:
-		return false, i18n.T(lang, "the project was created directly on the remote host; its files are not reachable from dockler (you can adopt it by pasting the compose)")
+		return false, i18n.T(lang, "the project was created directly on the remote host; its files are not reachable from dockera (you can adopt it by pasting the compose)")
 	case len(st.ConfigFiles) == 0:
 		return false, i18n.T(lang, "the containers do not record their compose files")
 	}
@@ -455,7 +455,7 @@ func (s *Server) deleteStack(w http.ResponseWriter, r *http.Request) {
 	}())
 }
 
-// adoptStack copies an external project's files into dockler's store so it
+// adoptStack copies an external project's files into dockera's store so it
 // can be managed (and edited) from here.
 func (s *Server) adoptStack(w http.ResponseWriter, r *http.Request) {
 	ep := r.PathValue("ep")
@@ -465,7 +465,7 @@ func (s *Server) adoptStack(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if info.Managed {
-		writeErr(w, badRequest("the stack is already managed by dockler"))
+		writeErr(w, badRequest("the stack is already managed by dockera"))
 		return
 	}
 	var body struct {
@@ -529,7 +529,7 @@ func (s *Server) stackLogs(w http.ResponseWriter, r *http.Request) {
 				label = ct.Name
 			}
 			if err := streamLogs(r.Context(), c, ct.ID, in.Config.Tty, q, label, st); err != nil && r.Context().Err() == nil {
-				b, _ := json.Marshal(logLine{S: "err", M: "[dockler] " + err.Error(), C: label})
+				b, _ := json.Marshal(logLine{S: "err", M: "[dockera] " + err.Error(), C: label})
 				st.Raw(b)
 			}
 		}()
@@ -588,7 +588,7 @@ func (s *Server) stackMerge(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if info.Managed {
-		writeErr(w, badRequest("dockler stacks already use a single file"))
+		writeErr(w, badRequest("dockera stacks already use a single file"))
 		return
 	}
 	if !info.Writable {

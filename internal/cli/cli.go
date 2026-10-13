@@ -3,7 +3,7 @@ package cli
 
 import (
 	"context"
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -18,7 +18,7 @@ import (
 
 	"golang.org/x/term"
 
-	"dockler/internal/docker"
+	"dockera/internal/docker"
 )
 
 type container struct {
@@ -350,7 +350,7 @@ func envOr(k, def string) string {
 	return def
 }
 
-// JSON prints v indented (used by `dockler inspect`).
+// JSON prints v indented (used by `dockera inspect`).
 func JSON(v any) {
 	enc := json.NewEncoder(os.Stdout)
 	enc.SetIndent("", "  ")

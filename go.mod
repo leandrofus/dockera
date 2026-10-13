@@ -1,4 +1,4 @@
-module dockler
+module dockera
 
 go 1.26.3
 

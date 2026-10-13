@@ -440,7 +440,7 @@ function ConfigEditor({ ep, c }: { ep: string; c: Container }) {
   return (
     <div className="config-editor">
       <div className="alert">
-        {tr('Docker cannot modify a container in place: when saving, dockler creates a new one with this configuration, swaps the names and removes the old one. Volumes are kept, and if the new one does not start the original is restored.')}
+        {tr('Docker cannot modify a container in place: when saving, dockera creates a new one with this configuration, swaps the names and removes the old one. Volumes are kept, and if the new one does not start the original is restored.')}
       </div>
       <ContainerForm ep={ep} value={spec} onChange={setSpec} />
       <div className={`savebar${dirty ? ' dirty' : ''}`}>

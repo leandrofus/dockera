@@ -2,7 +2,7 @@ package auth
 
 import (
 	"bufio"
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"encoding/json"
 	"io"
 	"net"
@@ -11,9 +11,9 @@ import (
 )
 
 // HelperSocket is where the socket-activated root helper listens
-// (dockler-pam.socket, root:dockler 0660). The web service itself runs
+// (dockera-pam.socket, root:dockera 0660). The web service itself runs
 // unprivileged and only asks the helper "is this password right?".
-const HelperSocket = "/run/dockler/pam.sock"
+const HelperSocket = "/run/dockera/pam.sock"
 
 type helperReq struct {
 	Service  string `json:"service"`

@@ -1,9 +1,9 @@
 // Package auth authenticates users against the operating system (PAM on
-// Linux) and maps them to dockler roles through POSIX groups.
+// Linux) and maps them to dockera roles through POSIX groups.
 package auth
 
 import (
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"os/user"
 	"slices"
 	"sync"

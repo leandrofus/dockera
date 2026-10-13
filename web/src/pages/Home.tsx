@@ -175,7 +175,7 @@ export function Home({ ep }: { ep: string }) {
           <h4><Server size={14} /> {tr('Hosts')}</h4>
           <ul className="task-list">
             {(endpoints || []).map((e) => (
-              <li key={e.name} onClick={() => go(e.name, 'home')}>
+              <li key={e.name} onClick={() => go(e.name, 'jump')}>
                 <span className={`dot dot-${e.online ? 'open' : 'closed'}`} />
                 <strong>{e.name}</strong>
                 <span className="muted small ellipsis">{e.url}</span>

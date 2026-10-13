@@ -18,7 +18,8 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
 
-	"dockler/internal/agent"
+	"dockera/internal/agent"
+	"dockera/internal/probe"
 )
 
 func TestHubBasics(t *testing.T) {
@@ -39,7 +40,7 @@ func TestHubBasics(t *testing.T) {
 
 func TestAgentTunnelAndDial(t *testing.T) {
 	// 1. Mock local Docker daemon listening on a temporary unix socket
-	tmpDir, err := os.MkdirTemp("", "dockler-test-*")
+	tmpDir, err := os.MkdirTemp("", "dockera-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -173,5 +174,43 @@ func TestAgentTunnelAndDial(t *testing.T) {
 
 	if resp.StatusCode != http.StatusOK || string(body) != "OK" {
 		t.Fatalf("unexpected response: status=%d, body=%q", resp.StatusCode, string(body))
+	}
+
+	// 5. Raw TCP to a port on the agent's host, and HTTP sniffing over it
+	web := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) { io.WriteString(w, "hi") }))
+	defer web.Close()
+	webAddr := strings.TrimPrefix(web.URL, "http://")
+	if got := probe.Sniff(dialCtx, func(ctx context.Context) (net.Conn, error) { return hub.DialTarget(ctx, "test-worker", webAddr) }); got != "http" {
+		t.Fatalf("Sniff through agent = %q, want http", got)
+	}
+	tc, err := hub.DialTarget(dialCtx, "test-worker", webAddr)
+	if err != nil {
+		t.Fatalf("DialTarget: %v", err)
+	}
+	fmt.Fprintf(tc, "GET / HTTP/1.0\r\nHost: x\r\n\r\n")
+	r2, err := http.ReadResponse(bufio.NewReader(tc), nil)
+	if err != nil {
+		t.Fatalf("read through tunnel: %v", err)
+	}
+	b2, _ := io.ReadAll(r2.Body)
+	tc.Close()
+	if string(b2) != "hi" {
+		t.Fatalf("body through tunnel = %q", b2)
+	}
+
+	// addresses outside the agent's host are refused
+	if _, err := hub.DialTarget(dialCtx, "test-worker", "203.0.113.7:80"); err == nil || !strings.Contains(err.Error(), "not an address of this host") {
+		t.Fatalf("expected refusal for a foreign address, got %v", err)
+	}
+
+	// the Docker proxy still works on the same session afterwards
+	c2, err := hub.Dial(dialCtx, "test-worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer c2.Close()
+	fmt.Fprintf(c2, "GET /_ping HTTP/1.1\r\nHost: x\r\n\r\n")
+	if r3, err := http.ReadResponse(bufio.NewReader(c2), nil); err != nil || r3.StatusCode != 200 {
+		t.Fatalf("docker proxy after dial: %v", err)
 	}
 }

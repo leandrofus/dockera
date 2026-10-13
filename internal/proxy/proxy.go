@@ -1,7 +1,7 @@
 // Package proxy exposes the local Docker Engine API over TCP, guarded by the
 // allowlist and a bearer token. Compatible with the docker CLI
 // (DOCKER_HOST=tcp://… plus an Authorization header in config.json) and
-// with other dockler instances.
+// with other dockera instances.
 package proxy
 
 import (
@@ -12,7 +12,7 @@ import (
 	"regexp"
 	"strings"
 
-	"dockler/internal/docker"
+	"dockera/internal/docker"
 )
 
 type Options struct {
@@ -40,15 +40,15 @@ func Handler(c *docker.Client, opt Options) http.Handler {
 		if !checkToken(r, opt.Token()) {
 			w.Header().Set("Content-Type", "application/json")
 			w.WriteHeader(http.StatusUnauthorized)
-			w.Write([]byte(`{"message":"dockler: invalid or missing token (Authorization: Bearer <token>)"}`))
+			w.Write([]byte(`{"message":"dockera: invalid or missing token (Authorization: Bearer <token>)"}`))
 			return
 		}
 		if opt.ReadOnly && r.Method != http.MethodGet && r.Method != http.MethodHead && !strings.HasSuffix(r.URL.Path, "/_ping") {
-			deny(w, "dockler: read-only proxy")
+			deny(w, "dockera: read-only proxy")
 			return
 		}
 		if opt.NoExec && execPath.MatchString(r.URL.Path) {
-			deny(w, "dockler: exec/attach disabled on this proxy")
+			deny(w, "dockera: exec/attach disabled on this proxy")
 			return
 		}
 		rp.ServeHTTP(w, r)

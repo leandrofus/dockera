@@ -8,7 +8,7 @@ import (
 	"strings"
 )
 
-// InstallService configures and enables a systemd unit for dockler-agent on Linux.
+// InstallService configures and enables a systemd unit for dockera-agent on Linux.
 func InstallService(cfg Config) error {
 	if runtime.GOOS != "linux" {
 		return fmt.Errorf("systemd service installation is only supported on Linux")
@@ -22,7 +22,7 @@ func InstallService(cfg Config) error {
 		return err
 	}
 
-	destBin := "/usr/local/bin/dockler-agent"
+	destBin := "/usr/local/bin/dockera-agent"
 	if self != destBin {
 		data, err := os.ReadFile(self)
 		if err != nil {
@@ -51,8 +51,8 @@ func InstallService(cfg Config) error {
 	execLine := destBin + " " + strings.Join(args, " ")
 
 	unitContent := fmt.Sprintf(`[Unit]
-Description=dockler agent for Docker
-Documentation=https://github.com/leandro/dockler
+Description=dockera agent for Docker
+Documentation=https://github.com/leandrofus/dockera
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
@@ -68,18 +68,18 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 `, execLine)
 
-	unitPath := "/etc/systemd/system/dockler-agent.service"
+	unitPath := "/etc/systemd/system/dockera-agent.service"
 	if err := os.WriteFile(unitPath, []byte(unitContent), 0o644); err != nil {
 		return fmt.Errorf("failed to write %s: %w", unitPath, err)
 	}
 
 	_ = exec.Command("systemctl", "daemon-reload").Run()
-	if err := exec.Command("systemctl", "enable", "--now", "dockler-agent").Run(); err != nil {
-		return fmt.Errorf("failed to enable and start dockler-agent: %w", err)
+	if err := exec.Command("systemctl", "enable", "--now", "dockera-agent").Run(); err != nil {
+		return fmt.Errorf("failed to enable and start dockera-agent: %w", err)
 	}
 
-	fmt.Println("dockler-agent service installed and started successfully! ✓")
+	fmt.Println("dockera-agent service installed and started successfully! ✓")
 	fmt.Printf("Service unit: %s\n", unitPath)
-	fmt.Println("Check status with: systemctl status dockler-agent")
+	fmt.Println("Check status with: systemctl status dockera-agent")
 	return nil
 }

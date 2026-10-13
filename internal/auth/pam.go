@@ -3,7 +3,7 @@
 package auth
 
 import (
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"errors"
 	"sync"
 

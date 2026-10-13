@@ -276,7 +276,7 @@ export function Marketplace({ ep }: { ep: string }) {
                     <div className="row gap">
                       {t.type === 1 ? <Box size={12} className="muted" /> : <Layers size={12} className="muted" />}
                       <span className="muted small">{tr(kindLabel[t.type])}</span>
-                      {t.source === 'builtin' && <Tag tone="accent">dockler</Tag>}
+                      {t.source === 'builtin' && <Tag tone="accent">dockera</Tag>}
                     </div>
                   </div>
                 </div>

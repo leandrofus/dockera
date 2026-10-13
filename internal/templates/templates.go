@@ -5,7 +5,7 @@ package templates
 
 import (
 	"context"
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	_ "embed"
 	"encoding/json"
 	"fmt"
@@ -16,7 +16,7 @@ import (
 	"sync"
 	"time"
 
-	"dockler/internal/config"
+	"dockera/internal/config"
 )
 
 //go:embed builtin.json
@@ -82,7 +82,7 @@ type Template struct {
 	Hostname      string      `json:"hostname,omitempty"`
 	Network       string      `json:"network,omitempty"`
 	Repository    *Repository `json:"repository,omitempty"`
-	// Compose is a dockler extension: inline compose file for type 3.
+	// Compose is a dockera extension: inline compose file for type 3.
 	Compose string `json:"compose,omitempty"`
 }
 
@@ -151,7 +151,7 @@ type SourceStatus struct {
 func (c *Catalog) List(ctx context.Context, refresh bool) ([]Template, []SourceStatus) {
 	builtin, _ := parse("builtin", builtinJSON)
 	all := append([]Template(nil), builtin...)
-	status := []SourceStatus{{Name: "dockler (built-in)", URL: "builtin", Count: len(builtin)}}
+	status := []SourceStatus{{Name: "dockera (built-in)", URL: "builtin", Count: len(builtin)}}
 	snap := c.cfg.Snapshot()
 	type res struct {
 		i    int

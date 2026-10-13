@@ -12,8 +12,9 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/hashicorp/yamux"
 
-	"dockler/internal/agent"
-	"dockler/internal/config"
+	"dockera/internal/access"
+	"dockera/internal/agent"
+	"dockera/internal/config"
 )
 
 var agentUpgrader = websocket.Upgrader{
@@ -56,7 +57,7 @@ func (s *Server) serveAgentBinary(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	w.Header().Set("Content-Disposition", `attachment; filename="dockler-agent"`)
+	w.Header().Set("Content-Disposition", `attachment; filename="dockera-agent"`)
 	w.Header().Set("Content-Type", "application/octet-stream")
 	http.ServeFile(w, r, exe)
 }
@@ -83,7 +84,7 @@ func (s *Server) serveAgentInstallScript(w http.ResponseWriter, r *http.Request)
 	}
 
 	script := fmt.Sprintf(`#!/bin/sh
-# Dockler Agent Installer
+# Dockera Agent Installer
 set -e
 
 SERVER="%s"
@@ -91,13 +92,13 @@ TOKEN="%s"
 NAME="%s"
 
 echo "============================================="
-echo " Installing dockler-agent on $NAME"
+echo " Installing dockera-agent on $NAME"
 echo " Central Server: $SERVER"
 echo "============================================="
 
-BIN_DEST="/usr/local/bin/dockler-agent"
+BIN_DEST="/usr/local/bin/dockera-agent"
 if [ "$(id -u)" != "0" ]; then
-    BIN_DEST="./dockler-agent"
+    BIN_DEST="./dockera-agent"
 fi
 
 echo "Downloading standalone agent binary from $SERVER..."
@@ -106,7 +107,7 @@ if command -v curl >/dev/null 2>&1; then
 elif command -v wget >/dev/null 2>&1; then
     wget --no-check-certificate -qO "$BIN_DEST" "$SERVER/api/agent/binary?token=$TOKEN"
 else
-    echo "Error: curl or wget is required to download dockler-agent." >&2
+    echo "Error: curl or wget is required to download dockera-agent." >&2
     exit 1
 fi
 
@@ -114,11 +115,11 @@ chmod +x "$BIN_DEST"
 echo "Binary downloaded to $BIN_DEST ✓"
 
 if [ "$(id -u)" = "0" ] && command -v systemctl >/dev/null 2>&1; then
-    echo "Installing systemd service (dockler-agent.service)..."
-    cat <<EOF > /etc/systemd/system/dockler-agent.service
+    echo "Installing systemd service (dockera-agent.service)..."
+    cat <<EOF > /etc/systemd/system/dockera-agent.service
 [Unit]
-Description=dockler agent for Docker
-Documentation=https://github.com/leandro/dockler
+Description=dockera agent for Docker
+Documentation=https://github.com/leandrofus/dockera
 After=network-online.target docker.service
 Wants=network-online.target
 Requires=docker.service
@@ -134,18 +135,18 @@ LimitNOFILE=65536
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload
-    systemctl enable --now dockler-agent
+    systemctl enable --now dockera-agent
     echo "============================================="
-    echo " dockler-agent service is active and running! ✓"
-    echo " Check status with: systemctl status dockler-agent"
+    echo " dockera-agent service is active and running! ✓"
+    echo " Check status with: systemctl status dockera-agent"
     echo "============================================="
 else
     echo "Starting agent in background..."
-    nohup "$BIN_DEST" agent --server "$SERVER" --token "$TOKEN" --name "$NAME" --insecure > dockler-agent.log 2>&1 &
+    nohup "$BIN_DEST" agent --server "$SERVER" --token "$TOKEN" --name "$NAME" --insecure > dockera-agent.log 2>&1 &
     PID=$!
     echo "============================================="
-    echo " dockler-agent is running in background (PID: $PID) ✓"
-    echo " Logs: dockler-agent.log"
+    echo " dockera-agent is running in background (PID: $PID) ✓"
+    echo " Logs: dockera-agent.log"
     echo "============================================="
 fi
 `, serverURL, token, name)
@@ -225,6 +226,7 @@ func (s *Server) handleAgentTunnel(w http.ResponseWriter, r *http.Request) {
 	defer session.Close()
 
 	agent.DefaultHub.Register(name, session)
+	agent.DefaultHub.SetAddr(name, access.RemoteIP(r, false).String())
 	s.dropClient(name)
 	log.Printf("[agent] node %q connected from %s ✓", name, r.RemoteAddr)
 

@@ -1,7 +1,7 @@
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
-// `bun run dev` proxies the API to a running `dockler serve` on :9900.
+// `bun run dev` proxies the API to a running `dockera serve` on :9900.
 export default defineConfig({
   plugins: [react()],
   server: {

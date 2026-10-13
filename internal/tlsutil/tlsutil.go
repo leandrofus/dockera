@@ -1,4 +1,4 @@
-// Package tlsutil creates and loads the self-signed certificate dockler uses
+// Package tlsutil creates and loads the self-signed certificate dockera uses
 // when no certificate is provided.
 package tlsutil
 
@@ -48,7 +48,7 @@ func generate(certFile, keyFile string) error {
 	host, _ := os.Hostname()
 	tmpl := &x509.Certificate{
 		SerialNumber: serial,
-		Subject:      pkix.Name{CommonName: "dockler " + host, Organization: []string{"dockler"}},
+		Subject:      pkix.Name{CommonName: "dockera " + host, Organization: []string{"dockera"}},
 		NotBefore:    time.Now().Add(-time.Hour),
 		NotAfter:     time.Now().AddDate(10, 0, 0),
 		KeyUsage:     x509.KeyUsageDigitalSignature,

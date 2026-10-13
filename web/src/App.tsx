@@ -2,7 +2,7 @@ import { t as tr, LANGUAGES, getLang, setLang } from './i18n'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Home as HomeIcon, Box, Layers, Image as ImageIcon, Network as NetIcon, HardDrive, Store, Activity as ActIcon, Settings as Cog,
-  Search, Plus, ChevronsUpDown, Languages, Star, Clock, LogOut, Moon, Sun, Server, Check, Download, PanelLeftClose, PanelLeft, Rocket,
+  Search, Plus, ChevronsUpDown, Zap, Languages, Star, Clock, LogOut, Moon, Sun, Server, Check, Download, PanelLeftClose, PanelLeft, Rocket,
 } from 'lucide-react'
 import { api, enc, setUnauthorizedHandler, stream } from './lib/api'
 import type { Container, Endpoint, Image, Network, Stack, Volume } from './lib/types'
@@ -21,6 +21,7 @@ import type { Fav } from './actions'
 import { ContainerFormDialog } from './components/ContainerForm'
 import { Home, Activity } from './pages/Home'
 import { Containers } from './pages/Containers'
+import { Jump } from './pages/Jump'
 import { ContainerRecord } from './pages/ContainerRecord'
 import { Stacks, StackRecord, NewStackDialog } from './pages/Stacks'
 import { Images, ImageRecord, Networks, NetworkRecord, Volumes, VolumeRecord } from './pages/Resources'
@@ -33,7 +34,8 @@ const SECTION_LABEL: Record<string, string> = { containers: tr('container'), sta
 type Recent = { ep: string; section: string; id: string; label: string }
 
 const NAV = [
-  { id: 'home', label: tr('Home'), icon: HomeIcon },
+  { id: 'jump', label: tr('Jump'), icon: Zap },
+  { id: 'home', label: tr('Dashboard'), icon: HomeIcon },
   { id: 'containers', label: tr('Containers'), icon: Box },
   { id: 'stacks', label: 'Stacks', icon: Layers },
   { id: 'images', label: tr('Images'), icon: ImageIcon },
@@ -107,7 +109,7 @@ function EndpointSwitcher({ ep, collapsed }: { ep: string; collapsed: boolean })
       icon: <span className={`dot dot-${e.online ? 'open' : 'closed'}`} />,
       hint: e.online ? `${e.running}/${e.total}` : 'offline',
       checked: undefined,
-      onClick: () => go(e.name, 'home'),
+      onClick: () => go(e.name, 'jump'),
     })),
     'sep',
     { label: tr('Add host…'), icon: <Plus size={14} />, onClick: () => go(ep, 'settings', 'hosts') },
@@ -128,7 +130,7 @@ function EndpointSwitcher({ ep, collapsed }: { ep: string; collapsed: boolean })
         <>
           <span className="workspace-text">
             <strong>{ep || '…'}</strong>
-            <span className="muted small ellipsis">{cur ? (cur.online ? `Docker ${cur.version}` : tr('offline')) : 'dockler'}</span>
+            <span className="muted small ellipsis">{cur ? (cur.online ? `Docker ${cur.version}` : tr('offline')) : 'dockera'}</span>
           </span>
           <ChevronsUpDown size={14} className="muted" />
         </>
@@ -282,7 +284,7 @@ function Palette({ ep, onClose }: { ep: string; onClose: () => void }) {
     { id: 'pull', label: tr('Pull image'), icon: <Download size={15} />, group: tr('Actions'), run: async () => { const x = await prompt({ title: tr('Pull image'), label: tr('Image'), placeholder: 'nginx:alpine' }); if (x) pullImage(ep, x) } },
     { id: 'market', label: tr('Deploy an app from the marketplace'), icon: <Rocket size={15} />, group: tr('Actions'), run: () => go(ep, 'marketplace') },
     ...[...NAV, ...NAV2].map((n) => ({ id: 'nav-' + n.id, label: tr('Go to {0}', n.label), icon: <n.icon size={15} />, group: tr('Navigation'), run: () => go(ep, n.id) })),
-    ...eps.filter((x) => x.name !== ep).map((x) => ({ id: 'ep-' + x.name, label: tr('Switch to host {0}', x.name), sub: x.url, icon: <Server size={15} />, group: tr('Hosts'), run: () => go(x.name, 'home') })),
+    ...eps.filter((x) => x.name !== ep).map((x) => ({ id: 'ep-' + x.name, label: tr('Switch to host {0}', x.name), sub: x.url, icon: <Server size={15} />, group: tr('Hosts'), run: () => go(x.name, 'jump') })),
     ...cts.map((c) => ({ id: c.Id, label: cname(c), sub: `${c.State} · ${c.Image}${stackOf(c) ? ' · ' + stackOf(c) : ''}`, icon: <Box size={15} />, group: tr('Containers'), run: () => go(ep, 'containers', c.Id), menu: () => containerActions(ep, c) })),
     ...cts.filter((c) => c.State === 'running').map((c) => ({ id: 'sh-' + c.Id, label: tr('Terminal in {0}', cname(c)), icon: <Box size={15} />, group: tr('Terminal'), run: () => go(ep, 'containers', c.Id, 'terminal') })),
     ...cts.map((c) => ({ id: 'lg-' + c.Id, label: tr('Logs of {0}', cname(c)), icon: <Box size={15} />, group: tr('Logs'), run: () => go(ep, 'containers', c.Id, 'logs') })),
@@ -372,7 +374,7 @@ function UserMenu() {
   const items = (): MenuEntry[] => [
     { header: me.method === 'token' ? tr('Token access') : tr('User {0}', me.user) },
     { label: me.role === 'admin' ? tr('Role: administrator') : tr('Role: read-only'), disabled: true },
-    me.version ? { label: `dockler ${me.version}`, disabled: true } : null,
+    me.version ? { label: `dockera ${me.version}`, disabled: true } : null,
     'sep',
     { label: tr('Language'), icon: <Languages size={14} />, submenu: LANGUAGES.map((l) => ({ label: l.label, checked: getLang() === l.id, onClick: () => setLang(l.id) })) },
     { label: tr('Sign out'), icon: <LogOut size={14} />, onClick: () => api.post('/logout').then(() => location.reload()) },
@@ -452,7 +454,7 @@ function Shell() {
   useLiveEvents(ep)
 
   useEffect(() => {
-    if (!route.ep && endpoints?.length) location.replace(href(endpoints[0].name, 'home'))
+    if (!route.ep && endpoints?.length) location.replace(href(endpoints[0].name, 'jump'))
   }, [route.ep, endpoints])
 
   useEffect(() => {
@@ -502,6 +504,12 @@ function Shell() {
     case 'marketplace':
       page = <Marketplace ep={ep} />
       break
+    case 'jump':
+      page = <Jump ep={ep} />
+      break
+    case 'home':
+      page = <Home ep={ep} />
+      break
     case 'activity':
       page = <Activity ep={ep} />
       break
@@ -509,7 +517,7 @@ function Shell() {
       page = <Settings ep={ep} tab={id} />
       break
     default:
-      page = <Home ep={ep} />
+      page = <Jump ep={ep} />
   }
 
   return (

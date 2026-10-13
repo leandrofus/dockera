@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"bufio"
 	"context"
 	"crypto/sha256"
 	"crypto/tls"
@@ -23,16 +24,16 @@ import (
 
 // Config configures the outbound agent connection.
 type Config struct {
-	Server      string // e.g. "https://dockler.example.com:9900"
+	Server      string // e.g. "https://dockera.example.com:9900"
 	Token       string // authorization token
-	Name        string // node name in dockler
+	Name        string // node name in dockera
 	Socket      string // path to local docker socket (default "/var/run/docker.sock")
 	Insecure    bool   // skip TLS certificate validation
 	Fingerprint string // expected sha256 fingerprint of the server certificate
 }
 
 // Run runs the standalone agent, maintaining a persistent outbound tunnel to
-// the central dockler server and proxying requests to the local Docker socket.
+// the central dockera server and proxying requests to the local Docker socket.
 func Run(ctx context.Context, cfg Config) error {
 	if cfg.Server == "" {
 		return errors.New("server address is required (--server)")
@@ -195,6 +196,12 @@ func connectAndServe(ctx context.Context, wsURL string, tlsConf *tls.Config, cfg
 func handleStream(stream *yamux.Stream, sockPath string) {
 	defer stream.Close()
 
+	br := bufio.NewReader(stream)
+	if head, _ := br.Peek(len("GET " + dialPath)); string(head) == "GET "+dialPath {
+		serveDial(stream, br)
+		return
+	}
+
 	dockerConn, err := net.Dial("unix", sockPath)
 	if err != nil {
 		log.Printf("[agent] failed to dial local docker socket %s: %v", sockPath, err)
@@ -204,7 +211,7 @@ func handleStream(stream *yamux.Stream, sockPath string) {
 
 	done := make(chan struct{}, 2)
 	go func() {
-		_, _ = io.Copy(dockerConn, stream)
+		_, _ = io.Copy(dockerConn, br)
 		done <- struct{}{}
 	}()
 	go func() {

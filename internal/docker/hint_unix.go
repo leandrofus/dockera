@@ -3,7 +3,7 @@
 package docker
 
 import (
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"errors"
 	"os"
 	"os/user"
@@ -12,7 +12,7 @@ import (
 )
 
 // permissionHint explains "permission denied" on a unix socket: who owns it
-// and who we are, so the fix (`dockler setup`) is obvious.
+// and who we are, so the fix (`dockera setup`) is obvious.
 func permissionHint(path string, err error) error {
 	if !errors.Is(err, os.ErrPermission) {
 		return err
@@ -49,5 +49,5 @@ func permissionHint(path string, err error) error {
 	if u, e := user.Current(); e == nil {
 		me = u.Username
 	}
-	return i18n.Errorf("no permission on %s (%s:%s %04o) for user %s; run `sudo dockler setup` to adapt the service to your Docker installation", path, owner, group, uint32(st.Mode().Perm()), me)
+	return i18n.Errorf("no permission on %s (%s:%s %04o) for user %s; run `sudo dockera setup` to adapt the service to your Docker installation", path, owner, group, uint32(st.Mode().Perm()), me)
 }

@@ -142,7 +142,7 @@ export function Stacks({ ep }: { ep: string }) {
           { id: 'running', label: tr('Running'), count: all.filter((s) => s.status === 'running').length },
           { id: 'partial', label: tc('pl', 'Partial'), count: all.filter((s) => s.status === 'partial').length },
           { id: 'stopped', label: tc('pl', 'Stopped'), count: all.filter((s) => s.status === 'stopped' || s.status === 'empty').length },
-          { id: 'managed', label: tc('pl', 'Created with dockler'), count: all.filter((s) => s.managed).length },
+          { id: 'managed', label: tc('pl', 'Created with dockera'), count: all.filter((s) => s.managed).length },
         ]}
       />
       <div className="page-body">
@@ -157,7 +157,7 @@ export function Stacks({ ep }: { ep: string }) {
                   <Avatar name={s.name} size={34} square />
                   <div className="grow">
                     <strong>{s.name}</strong>
-                    <div className="muted small ellipsis" title={s.working_dir}>{s.managed ? tr('managed by dockler') : s.working_dir || tr('external')}</div>
+                    <div className="muted small ellipsis" title={s.working_dir}>{s.managed ? tr('managed by dockera') : s.working_dir || tr('external')}</div>
                   </div>
                   <MenuButton items={() => stackActions(ep, s)} />
                 </div>
@@ -188,7 +188,7 @@ export function Stacks({ ep }: { ep: string }) {
               { key: 'status', label: tr('Status'), width: 150, sort: (s) => s.status, render: (s) => <Pill state={s.status} /> },
               { key: 'n', label: tr('Containers'), width: 120, sort: (s) => s.total, render: (s) => `${s.running}/${s.total}` },
               { key: 'svc', label: tr('Services'), render: (s) => <span className="tags">{s.services.map((x) => <Tag key={x}>{x}</Tag>)}</span> },
-              { key: 'dir', label: tr('Origin'), render: (s) => <span className="muted small ellipsis">{s.managed ? 'dockler' : s.working_dir}</span> },
+              { key: 'dir', label: tr('Origin'), render: (s) => <span className="muted small ellipsis">{s.managed ? 'dockera' : s.working_dir}</span> },
               { key: 'm', label: '', width: 36, render: (s) => <MenuButton items={() => stackActions(ep, s)} /> },
             ]}
           />
@@ -221,7 +221,7 @@ export function StackRecord({ ep, name, tab = 'services' }: { ep: string; name: 
           <div className="row gap wrap">
             <Pill state={s.status} />
             <span className="muted small">{s.running}/{s.total} {tr('containers ·')} {s.services.length} {tr('services')}</span>
-            {s.managed ? <Tag tone="accent">dockler</Tag> : <Tag>{tr('external')}</Tag>}
+            {s.managed ? <Tag tone="accent">dockera</Tag> : <Tag>{tr('external')}</Tag>}
           </div>
         </div>
         <div className="record-actions needs-admin">
@@ -244,7 +244,7 @@ export function StackRecord({ ep, name, tab = 'services' }: { ep: string; name: 
             <Props
               items={[
                 [tr('Project'), s.name],
-                [tr('Origin'), s.managed ? tr('Created with dockler') : tr('External (docker compose)')],
+                [tr('Origin'), s.managed ? tr('Created with dockera') : tr('External (docker compose)')],
                 s.working_dir && [tr('Directory'), <span className="mono small">{s.working_dir}</span>, () => [{ label: tr('Copy directory'), onClick: () => copy(s.working_dir!) }]],
                 data.files && [tr('Files'), <span className="mono small">{data.files.files.map((f) => f.name).join(' + ')}</span>, () => data.files!.files.map((f) => ({ label: tr('Copy path of {0}', f.name), onClick: () => copy(f.path) }))],
                 ['Editable', s.editable ? tr('Yes') : <span title={s.reason}>{tr('No ·')} {s.reason}</span>],
@@ -346,7 +346,7 @@ function ComposeEditor({ ep, stack, files, filesError }: { ep: string; stack: St
       <div>
         <div className="alert">{filesError}</div>
         <p className="muted">
-          {tr('You can')} <strong>{tr('adopt it')}</strong> {tr('by pasting its compose: dockler will keep a copy and you will be able to edit and redeploy it from here.')}
+          {tr('You can')} <strong>{tr('adopt it')}</strong> {tr('by pasting its compose: dockera will keep a copy and you will be able to edit and redeploy it from here.')}
         </p>
         <button className="btn" onClick={() => openDialog((close) => <AdoptDialog ep={ep} name={stack.name} onClose={close} />)}>
           <FolderOpen size={14} /> {tr('Adopt by pasting the compose')}
@@ -370,7 +370,7 @@ function ComposeEditor({ ep, stack, files, filesError }: { ep: string; stack: St
     const base = files.files[0]
     const ok = await confirm({
       title: tr('Merge into a single file'),
-      body: tr('The merged result will be written to {0} and {1} will be set aside (.dockler-bak copies of every original are kept). {VARIABLES} are kept, but comments and formatting are lost. Containers are not recreated: the resulting configuration is the same.', base.name, files.files.slice(1).map((f) => f.name).join(', ')),
+      body: tr('The merged result will be written to {0} and {1} will be set aside (.dockera-bak copies of every original are kept). {VARIABLES} are kept, but comments and formatting are lost. Containers are not recreated: the resulting configuration is the same.', base.name, files.files.slice(1).map((f) => f.name).join(', ')),
       confirm: tr('Merge'),
     })
     if (!ok) return

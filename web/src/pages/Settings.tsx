@@ -59,7 +59,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
   const origin = window.location.origin
   const nodeName = f.name || 'node-1'
   const installCmd = `curl -kfsSL "${origin}/api/agent/install.sh?token=${f.token}&name=${nodeName}" | sh`
-  const manualCmd = `curl -kfsSL "${origin}/api/agent/binary?token=${f.token}" -o dockler-agent && chmod +x dockler-agent && sudo ./dockler-agent agent --server "${origin}" --token "${f.token}" --name "${nodeName}"`
+  const manualCmd = `curl -kfsSL "${origin}/api/agent/binary?token=${f.token}" -o dockera-agent && chmod +x dockera-agent && sudo ./dockera-agent agent --server "${origin}" --token "${f.token}" --name "${nodeName}"`
 
   return (
     <Modal title={initial ? tr('Edit {0}', initial.name) : tr('Add host')} icon={<Server size={18} />} onClose={onClose} footer={<>
@@ -76,7 +76,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
           <select value={scheme} onChange={(e) => onSchemeChange(e.target.value)}>
             <option value="ssh">{tr('SSH (agentless)')}</option>
             <option value="agent">{tr('Agent (outbound / Edge)')}</option>
-            <option value="tcp">dockler expose (TCP + token)</option>
+            <option value="tcp">dockera expose (TCP + token)</option>
             <option value="unix">{tr('Local socket')}</option>
           </select>
         </label>
@@ -84,7 +84,7 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
         {scheme === 'ssh' && <label className="field span-2"><span>{tr('SSH key (optional)')}</span><input className="mono" placeholder={tr('~/.ssh/id_ed25519 (defaults to your SSH agent/config)')} value={f.ssh_key} onChange={(e) => setF({ ...f, ssh_key: e.target.value })} /></label>}
         {scheme === 'tcp' && (
           <>
-            <label className="field span-2"><span>{tr('Remote host token')}</span><input className="mono" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={tr('output of `dockler token` on the host')} /></label>
+            <label className="field span-2"><span>{tr('Remote host token')}</span><input className="mono" value={f.token} onChange={(e) => setF({ ...f, token: e.target.value })} placeholder={tr('output of `dockera token` on the host')} /></label>
             <label className="check"><input type="checkbox" checked={f.tls} onChange={(e) => setF({ ...f, tls: e.target.checked })} /> TLS</label>
             <label className="field"><span>{tr('TLS sha256 fingerprint (pinning)')}</span><input className="mono" value={f.fingerprint} onChange={(e) => setF({ ...f, fingerprint: e.target.value, tls: f.tls || !!e.target.value })} /></label>
           </>
@@ -119,8 +119,8 @@ function EndpointDialog({ initial, onClose }: { initial?: Endpoint; onClose: () 
       <div className="help">
         {scheme === 'ssh' && <>{tr('Uses your')} <code>ssh</code> {tr('client and runs')} <code>docker system dial-stdio</code> {tr('on the remote:')} <strong>{tr('nothing needs to be installed')}</strong> {tr('there. Requires key-based access (no interactive password) and a user allowed to use Docker.')}</>}
         {scheme === 'agent' && <>{tr('The standalone agent is downloaded directly from this server and connects outbound. Ideal for nodes behind NAT, firewalls or dynamic IPs.')}</>}
-        {scheme === 'tcp' && <>{tr('On the remote host:')} <code>dockler expose --allow &lt;{tr('your-IP')}&gt;</code>{tr('. It prints the token and TLS fingerprint to paste here.')}</>}
-        {scheme === 'unix' && <>{tr('Docker socket of the machine running dockler.')}</>}
+        {scheme === 'tcp' && <>{tr('On the remote host:')} <code>dockera expose --allow &lt;{tr('your-IP')}&gt;</code>{tr('. It prints the token and TLS fingerprint to paste here.')}</>}
+        {scheme === 'unix' && <>{tr('Docker socket of the machine running dockera.')}</>}
       </div>
     </Modal>
   )
@@ -131,10 +131,10 @@ function Hosts() {
   const menu = useMenu()
   const actions = (e: Endpoint) => [
     { header: e.name },
-    { label: tr('Open'), onClick: () => go(e.name, 'home') },
+    { label: tr('Open'), onClick: () => go(e.name, 'jump') },
     { label: tr('Edit…'), icon: <Pencil size={14} />, onClick: () => openDialog((c) => <EndpointDialog initial={e} onClose={c} />) },
     { label: tr('Copy URL'), icon: <ClipboardCopy size={14} />, onClick: () => copy(e.url) },
-    { label: tr('Copy docker-env command'), icon: <Terminal size={14} />, onClick: () => copy(`eval "$(dockler docker-env ${e.name})"`) },
+    { label: tr('Copy docker-env command'), icon: <Terminal size={14} />, onClick: () => copy(`eval "$(dockera docker-env ${e.name})"`) },
     ...(e.url.startsWith('agent://') ? [{
       label: tr('Copy agent install command'),
       icon: <ClipboardCopy size={14} />,
@@ -142,20 +142,20 @@ function Hosts() {
     }] : []),
     'sep' as const,
     { label: tr('Delete…'), icon: <Trash2 size={14} />, danger: true, onClick: async () => {
-      if (await confirm({ title: tr('Delete host {0}', e.name), body: tr('It is only removed from dockler; the host is not touched.'), danger: true, confirm: tr('Delete') }))
+      if (await confirm({ title: tr('Delete host {0}', e.name), body: tr('It is only removed from dockera; the host is not touched.'), danger: true, confirm: tr('Delete') }))
         api.del(`/endpoints/${enc(e.name)}`).then(() => invalidate('/endpoints')).catch(toast.err)
     } },
   ]
   return (
     <div>
       <div className="row gap section-head">
-        <p className="muted grow">{tr('Each host is a Docker daemon. dockler connects over SSH, via outbound agent, or to')} <code>dockler expose</code>.</p>
+        <p className="muted grow">{tr('Each host is a Docker daemon. dockera connects over SSH, via outbound agent, or to')} <code>dockera expose</code>.</p>
         <button className="btn" onClick={reload}>{loading ? <Spinner /> : <RefreshCw size={14} />}</button>
         <button className="btn btn-primary" onClick={() => openDialog((c) => <EndpointDialog onClose={c} />)}><Plus size={14} /> {tr('Add host')}</button>
       </div>
       <div className="cards">
         {(data || []).map((e) => (
-          <div key={e.name} className="host-card" onContextMenu={menu(() => actions(e))} onClick={() => go(e.name, 'home')}>
+          <div key={e.name} className="host-card" onContextMenu={menu(() => actions(e))} onClick={() => go(e.name, 'jump')}>
             <div className="row gap">
               <span className={`dot dot-${e.online ? 'open' : 'closed'}`} />
               <strong className="grow">{e.name}</strong>
@@ -336,7 +336,7 @@ function Sources() {
   return (
     <div className="panel">
       <h4><Store size={14} /> {tr('Marketplace sources')}</h4>
-      <p className="muted small">{tr('Compatible with the Portainer app template format (v2/v3). Besides these, dockler ships its own built-in catalog.')}</p>
+      <p className="muted small">{tr('Compatible with the Portainer app template format (v2/v3). Besides these, dockera ships its own built-in catalog.')}</p>
       <ul className="source-list">
         {list.map((s, i) => (
           <li key={s.url}>
@@ -418,17 +418,17 @@ export function Login({ onDone }: { onDone: () => void }) {
   return (
     <div className="login">
       <form className="login-card" onSubmit={submit}>
-        <div className="brand big"><span className="brand-mark">d</span> dockler</div>
+        <div className="brand big"><span className="brand-mark">d</span> dockera</div>
         {mode === 'user' ? (
           <>
             <p className="muted">{tr('Sign in with your system user.')}</p>
-            <p className="help">{tr('No access yet? Ask an administrator to add your account to the dockler-admins (full access) or dockler-viewers (read-only) group.')}</p>
+            <p className="help">{tr('No access yet? Ask an administrator to add your account to the dockera-admins (full access) or dockera-viewers (read-only) group.')}</p>
             <input autoFocus autoComplete="username" placeholder={tr('user')} value={username} onChange={(e) => setUsername(e.target.value)} />
             <input type="password" autoComplete="current-password" placeholder={tr('password')} value={password} onChange={(e) => setPassword(e.target.value)} />
           </>
         ) : (
           <>
-            <p className="muted">{tr('Emergency access token:')} <code>sudo dockler token</code> {tr('on the server.')}</p>
+            <p className="muted">{tr('Emergency access token:')} <code>sudo dockera token</code> {tr('on the server.')}</p>
             <input className="mono" type="password" autoFocus placeholder="token" value={token} onChange={(e) => setToken(e.target.value)} />
           </>
         )}

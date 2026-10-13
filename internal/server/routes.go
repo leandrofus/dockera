@@ -30,6 +30,8 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("POST /api/settings/rotate-token", s.admin(s.rotateToken))
 	mux.HandleFunc("GET /api/templates", s.auth(s.listTemplates))
 	mux.HandleFunc("GET /api/templates/compose", s.auth(s.templateCompose))
+	mux.HandleFunc("GET /api/tunnels", s.auth(s.listTunnels))
+	mux.HandleFunc("DELETE /api/tunnels/{id}", s.admin(s.closeTunnel))
 
 	e := func(pattern string, h http.HandlerFunc) {
 		method, path, _ := cut(pattern)
@@ -80,6 +82,9 @@ func (s *Server) routes(mux *http.ServeMux) {
 	e("GET /volumes/{name}", s.inspectVolume)
 	e("DELETE /volumes/{name}", s.removeVolume)
 	e("POST /volumes/prune", s.pruneVolumes)
+
+	e("GET /jump", s.jump)
+	e("POST /tunnels", s.openTunnel)
 
 	e("GET /stacks", s.listStacks)
 	e("POST /stacks", s.createStack)

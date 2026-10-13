@@ -10,18 +10,18 @@ import (
 	"testing"
 	"time"
 
-	"dockler/internal/access"
-	"dockler/internal/agent"
-	"dockler/internal/config"
-	"dockler/internal/server"
+	"dockera/internal/access"
+	"dockera/internal/agent"
+	"dockera/internal/config"
+	"dockera/internal/server"
 )
 
 func newTestServer(t *testing.T) (*server.Server, *config.Config, func()) {
-	tmpDir, err := os.MkdirTemp("", "dockler-srv-test-*")
+	tmpDir, err := os.MkdirTemp("", "dockera-srv-test-*")
 	if err != nil {
 		t.Fatal(err)
 	}
-	os.Setenv("DOCKLER_HOME", tmpDir)
+	os.Setenv("DOCKERA_HOME", tmpDir)
 
 	cfg, err := config.Load()
 	if err != nil {
@@ -38,7 +38,7 @@ func newTestServer(t *testing.T) (*server.Server, *config.Config, func()) {
 	srv := server.New(cfg, acl, os.DirFS(tmpDir))
 	cleanup := func() {
 		os.RemoveAll(tmpDir)
-		os.Unsetenv("DOCKLER_HOME")
+		os.Unsetenv("DOCKERA_HOME")
 	}
 	return srv, cfg, cleanup
 }
@@ -64,14 +64,14 @@ func TestAgentInstallScriptAndBinary(t *testing.T) {
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for /api/agent/binary with valid token, got %d", rec.Code)
 	}
-	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "dockler-agent") {
+	if cd := rec.Header().Get("Content-Disposition"); !strings.Contains(cd, "dockera-agent") {
 		t.Fatalf("expected Content-Disposition header, got %q", cd)
 	}
 
 	// 3. Test /api/agent/install.sh with valid token -> 200 shell script
 	rec = httptest.NewRecorder()
 	req = httptest.NewRequest("GET", "/api/agent/install.sh?token=test-admin-token&name=edge-node", nil)
-	req.Host = "dockler.central:9900"
+	req.Host = "dockera.central:9900"
 	handler.ServeHTTP(rec, req)
 	if rec.Code != http.StatusOK {
 		t.Fatalf("expected 200 for /api/agent/install.sh, got %d", rec.Code)
@@ -93,7 +93,7 @@ func TestAgentAutoRegistrationAndDial(t *testing.T) {
 	defer ts.Close()
 
 	// Create mock docker socket
-	tmpDir, _ := os.MkdirTemp("", "dockler-agent-mock-*")
+	tmpDir, _ := os.MkdirTemp("", "dockera-agent-mock-*")
 	defer os.RemoveAll(tmpDir)
 	mockSock := filepath.Join(tmpDir, "docker.sock")
 	ln, err := os.Create(mockSock)

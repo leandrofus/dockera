@@ -12,7 +12,7 @@ export const LANGUAGES = [
 
 function detect(): string {
   try {
-    const saved = localStorage.getItem('dockler:lang')
+    const saved = localStorage.getItem('dockera:lang')
     if (saved) return JSON.parse(saved)
   } catch {}
   const nav = (navigator.languages?.[0] || navigator.language || 'en').slice(0, 2).toLowerCase()
@@ -27,7 +27,7 @@ export const getLang = () => lang
 /** Switches language; the page reloads so module-level labels refresh too. */
 export function setLang(l: string) {
   try {
-    localStorage.setItem('dockler:lang', JSON.stringify(l))
+    localStorage.setItem('dockera:lang', JSON.stringify(l))
   } catch {}
   location.reload()
 }

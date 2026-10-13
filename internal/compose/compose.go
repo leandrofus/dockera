@@ -1,10 +1,10 @@
-// Package compose stores compose stacks created from dockler and runs the
+// Package compose stores compose stacks created from dockera and runs the
 // `docker compose` CLI plugin against any configured endpoint.
 package compose
 
 import (
 	"context"
-	"dockler/internal/i18n"
+	"dockera/internal/i18n"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -18,9 +18,9 @@ import (
 	"sort"
 	"strings"
 
-	"dockler/internal/agent"
-	"dockler/internal/config"
-	"dockler/internal/docker"
+	"dockera/internal/agent"
+	"dockera/internal/config"
+	"dockera/internal/docker"
 )
 
 const FileName = "compose.yaml"
@@ -124,7 +124,7 @@ func (s *Store) Exists(endpoint, name string) bool {
 }
 
 // ReadExternal loads every compose file of a project started outside
-// dockler (base + overrides), using the paths recorded in its container
+// dockera (base + overrides), using the paths recorded in its container
 // labels. Only works when those paths are visible from this machine.
 func ReadExternal(workDir string, configFiles []string, envFile string) (*Files, error) {
 	if len(configFiles) == 0 {
@@ -192,7 +192,7 @@ type Runner struct {
 // Command builds `docker compose -p project [-f files...] args...`.
 func (r *Runner) Command(ctx context.Context, project, dir string, files []string, args ...string) (*exec.Cmd, func(), error) {
 	if _, err := exec.LookPath("docker"); err != nil {
-		return nil, nil, i18n.Errorf("the `docker` CLI with the compose plugin is required on the machine running dockler")
+		return nil, nil, i18n.Errorf("the `docker` CLI with the compose plugin is required on the machine running dockera")
 	}
 	full := []string{"compose", "-p", project}
 	for _, f := range files {
@@ -245,7 +245,7 @@ func (r *Runner) env() ([]string, func(), error) {
 		host = "tcp://" + u.Host
 	}
 
-	// Temporary DOCKER_CONFIG: the user's config plus dockler registries and
+	// Temporary DOCKER_CONFIG: the user's config plus dockera registries and
 	// the endpoint token header.
 	cfg := map[string]any{}
 	home, _ := os.UserHomeDir()
@@ -272,7 +272,7 @@ func (r *Runner) env() ([]string, func(), error) {
 		hdrs["Authorization"] = "Bearer " + ep.Token
 		cfg["HttpHeaders"] = hdrs
 	}
-	tmp, err := os.MkdirTemp("", "dockler-cfg-")
+	tmp, err := os.MkdirTemp("", "dockera-cfg-")
 	if err != nil {
 		return nil, nil, err
 	}
@@ -365,7 +365,7 @@ func TLSEnv(ctx context.Context, ep config.Endpoint, dir string) ([]string, erro
 }
 
 // BackupSuffix marks originals kept by Merge.
-const BackupSuffix = ".dockler-bak"
+const BackupSuffix = ".dockera-bak"
 
 // ExistingFiles drops files that Merge folded into the base file (they are
 // still listed in container labels until the containers are recreated).
@@ -383,7 +383,7 @@ func ExistingFiles(paths []string) []string {
 }
 
 // Merge writes merged into the project's first file and moves every other
-// file aside (<file>.dockler-bak), keeping a backup of the base too.
+// file aside (<file>.dockera-bak), keeping a backup of the base too.
 func Merge(f *Files, merged string) ([]string, error) {
 	if len(f.Files) < 2 {
 		return nil, i18n.Errorf("the project already uses a single file")

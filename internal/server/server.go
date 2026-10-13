@@ -1,4 +1,4 @@
-// Package server is dockler's HTTP API and web UI.
+// Package server is dockera's HTTP API and web UI.
 package server
 
 import (
@@ -16,13 +16,13 @@ import (
 	"sync"
 	"time"
 
-	"dockler/internal/access"
-	"dockler/internal/auth"
-	"dockler/internal/compose"
-	"dockler/internal/config"
-	"dockler/internal/docker"
-	"dockler/internal/i18n"
-	"dockler/internal/templates"
+	"dockera/internal/access"
+	"dockera/internal/auth"
+	"dockera/internal/compose"
+	"dockera/internal/config"
+	"dockera/internal/docker"
+	"dockera/internal/i18n"
+	"dockera/internal/templates"
 )
 
 type Server struct {
@@ -37,6 +37,8 @@ type Server struct {
 	Listen      string
 	Expose      string
 	AgentListen string
+	// TunnelPorts is the port range for ephemeral forwards, e.g. 41000-41099
+	TunnelPorts string
 
 	mu      sync.Mutex
 	clients map[string]*docker.Client
@@ -44,6 +46,7 @@ type Server struct {
 	limiter *auth.Limiter
 	roles   sync.Map // user -> cachedRole
 	audit   *auditLog
+	tunnels tunnels
 }
 
 func New(cfg *config.Config, acl *access.List, ui fs.FS) *Server {

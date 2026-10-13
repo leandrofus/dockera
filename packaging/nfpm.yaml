@@ -1,5 +1,5 @@
 # nfpm config — built by packaging/build.sh (make packages)
-name: dockler
+name: dockera
 arch: ${ARCH}
 platform: linux
 version: ${VERSION}
@@ -11,7 +11,7 @@ description: |
   Agentless Docker management: CRM-style web UI, compose stacks,
   marketplace, terminal and live logs. Sign-in with system users (PAM)
   and roles by POSIX groups.
-vendor: dockler
+vendor: dockera
 
 depends:
   - libpam0g
@@ -19,7 +19,7 @@ overrides:
   rpm:
     depends:
       - pam
-      # any Docker-compatible engine; how dockler reaches it is detected at install (dockler setup)
+      # any Docker-compatible engine; how dockera reaches it is detected at install (dockera setup)
       - (docker-ce or moby-engine or docker or docker-ee or podman-docker)
     recommends:
       - (docker-compose-plugin or docker-compose)
@@ -33,24 +33,24 @@ overrides:
       - openssh-client
 
 contents:
-  - src: ./dist/build/dockler-linux-${ARCH}
-    dst: /usr/bin/dockler
+  - src: ./dist/build/dockera-linux-${ARCH}
+    dst: /usr/bin/dockera
     file_info: { mode: 0755 }
-  - src: ./packaging/systemd/dockler.service
-    dst: /usr/lib/systemd/system/dockler.service
-  - src: ./packaging/systemd/dockler-pam.socket
-    dst: /usr/lib/systemd/system/dockler-pam.socket
-  - src: ./packaging/systemd/dockler-pam@.service
-    dst: /usr/lib/systemd/system/dockler-pam@.service
-  - src: ./packaging/dockler.env
-    dst: /etc/dockler/dockler.env
+  - src: ./packaging/systemd/dockera.service
+    dst: /usr/lib/systemd/system/dockera.service
+  - src: ./packaging/systemd/dockera-pam.socket
+    dst: /usr/lib/systemd/system/dockera-pam.socket
+  - src: ./packaging/systemd/dockera-pam@.service
+    dst: /usr/lib/systemd/system/dockera-pam@.service
+  - src: ./packaging/dockera.env
+    dst: /etc/dockera/dockera.env
     type: config|noreplace
-  - src: ./packaging/pam/dockler.redhat
-    dst: /etc/pam.d/dockler
+  - src: ./packaging/pam/dockera.redhat
+    dst: /etc/pam.d/dockera
     type: config|noreplace
     packager: rpm
-  - src: ./packaging/pam/dockler.debian
-    dst: /etc/pam.d/dockler
+  - src: ./packaging/pam/dockera.debian
+    dst: /etc/pam.d/dockera
     type: config|noreplace
     packager: deb
 

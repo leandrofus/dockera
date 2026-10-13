@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react'
 // Per-browser preferences (favorites, view modes, saved views…) in
 // localStorage, with a same-tab change event so every hook stays in sync.
 
-const KEY = (n: string) => 'dockler:' + n
+const KEY = (n: string) => 'dockera:' + n
 
 export function getPref<T>(name: string, initial: T): T {
   try {
@@ -19,15 +19,15 @@ export function setPref<T>(name: string, v: T | ((prev: T) => T), initial?: T) {
   try {
     localStorage.setItem(KEY(name), JSON.stringify(next))
   } catch {}
-  window.dispatchEvent(new CustomEvent('dockler:pref', { detail: name }))
+  window.dispatchEvent(new CustomEvent('dockera:pref', { detail: name }))
 }
 
 export function usePref<T>(name: string, initial: T): [T, (v: T | ((p: T) => T)) => void] {
   const [v, setV] = useState<T>(() => getPref(name, initial))
   useEffect(() => {
     const on = (ev: Event) => (ev as CustomEvent).detail === name && setV(getPref(name, initial))
-    window.addEventListener('dockler:pref', on)
-    return () => window.removeEventListener('dockler:pref', on)
+    window.addEventListener('dockera:pref', on)
+    return () => window.removeEventListener('dockera:pref', on)
   }, [name])
   return [v, (nv) => setPref(name, nv, initial)]
 }

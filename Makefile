@@ -3,14 +3,14 @@ LDFLAGS := -s -w -X main.version=$(VERSION)
 PLATFORMS := linux/amd64 linux/arm64 linux/arm darwin/amd64 darwin/arm64 windows/amd64
 
 PKG_VERSION ?= 0.1.0
-MAINTAINER ?= dockler <dockler@localhost>
+MAINTAINER ?= dockera <dockera@localhost>
 
 .DEFAULT_GOAL := help
 
 .PHONY: help all web build build-pam dist packages dev run serve ui test test-unit test-race test-web clean
 
 help: ## Show this help message
-	@echo "dockler — lightweight Docker management"
+	@echo "dockera — lightweight Docker management"
 	@echo ""
 	@echo "Usage: make [target]"
 	@awk 'BEGIN {FS = ":.*?## "} \
@@ -18,13 +18,13 @@ help: ## Show this help message
 		/^[a-zA-Z_-]+:.*?## / {printf "  \033[36m%-14s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST)
 
 ##@ Running the service
-run: build ## Run dockler serve locally (builds first; args via ARGS="...")
-	./bin/dockler serve $(ARGS)
+run: build ## Run dockera serve locally (builds first; args via ARGS="...")
+	./bin/dockera serve $(ARGS)
 
 serve: run ## Alias for 'run'
 
-ui: build ## Run dockler ui and open browser (builds first)
-	./bin/dockler ui $(ARGS)
+ui: build ## Run dockera ui and open browser (builds first)
+	./bin/dockera ui $(ARGS)
 
 ##@ Build targets
 all: build ## Build web assets and binary (default build)
@@ -36,18 +36,18 @@ web/node_modules: web/package.json
 web: web/node_modules ## Build web frontend assets
 	cd web && (bun run build || npm run build)
 
-build: web ## Build static binary in bin/dockler (no PAM)
-	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dockler .
+build: web ## Build static binary in bin/dockera (no PAM)
+	CGO_ENABLED=0 go build -trimpath -ldflags "$(LDFLAGS)" -o bin/dockera .
 
 # Local binary with PAM (needs gcc and pam-devel / libpam0g-dev)
 build-pam: web ## Build binary with PAM support (needs gcc and pam headers)
-	CGO_ENABLED=1 go build -trimpath -tags pam -ldflags "$(LDFLAGS)" -o bin/dockler .
+	CGO_ENABLED=1 go build -trimpath -tags pam -ldflags "$(LDFLAGS)" -o bin/dockera .
 
 # rpm + deb (amd64, arm64) with PAM, built in a container: needs only Docker
 packages: web ## Build rpm and deb packages (amd64, arm64) using Docker
-	docker build -t dockler-pkg-builder packaging
+	docker build -t dockera-pkg-builder packaging
 	docker run --rm -u $$(id -u):$$(id -g) -v $(CURDIR):/src -w /src \
-		-e VERSION=$(PKG_VERSION) -e MAINTAINER="$(MAINTAINER)" dockler-pkg-builder packaging/build.sh
+		-e VERSION=$(PKG_VERSION) -e MAINTAINER="$(MAINTAINER)" dockera-pkg-builder packaging/build.sh
 
 # Static binaries for every platform in dist/ (no PAM: token login only)
 dist: web ## Build static binaries for all platforms in dist/
@@ -55,12 +55,12 @@ dist: web ## Build static binaries for all platforms in dist/
 	@for p in $(PLATFORMS); do \
 		os=$${p%/*}; arch=$${p#*/}; ext=; [ $$os = windows ] && ext=.exe; \
 		echo "→ $$os/$$arch"; \
-		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o dist/dockler-$$os-$$arch$$ext . || exit 1; \
+		CGO_ENABLED=0 GOOS=$$os GOARCH=$$arch go build -trimpath -ldflags "$(LDFLAGS)" -o dist/dockera-$$os-$$arch$$ext . || exit 1; \
 	done
-	@cd dist && sha256sum dockler-* > SHA256SUMS
+	@cd dist && sha256sum dockera-* > SHA256SUMS
 
 ##@ Development
-dev: ## Run frontend dev server with hot reload against dockler serve
+dev: ## Run frontend dev server with hot reload against dockera serve
 	cd web && bun run dev
 
 ##@ Testing
