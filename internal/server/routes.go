@@ -32,6 +32,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	mux.HandleFunc("GET /api/templates", s.auth(s.listTemplates))
 	mux.HandleFunc("GET /api/templates/compose", s.auth(s.templateCompose))
 	mux.HandleFunc("GET /api/tunnels", s.auth(s.listTunnels))
+	mux.HandleFunc("PUT /api/tunnels/{id}", s.admin(s.updateTunnel))
 	mux.HandleFunc("DELETE /api/tunnels/{id}", s.admin(s.closeTunnel))
 	mux.HandleFunc("GET /api/exposures", s.auth(s.listExposures))
 	mux.HandleFunc("PUT /api/exposures/{id}/access", s.admin(s.updateExposureAccess))

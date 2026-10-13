@@ -830,3 +830,9 @@ mark { background: #fde68a; color: #111; border-radius: 2px; }
 @media (max-width: 640px) { .expose-kinds { grid-template-columns: 1fr; } }
 .expose-access input[type='checkbox'] { width: auto; }
 .expose-rules > .check { align-self: flex-start; }
+.tunnel-modes { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+.tunnel-modes .expose-kind strong { display: inline-flex; align-items: center; gap: 6px; }
+.tunnels-tab { display: flex; flex-direction: column; gap: 12px; }
+.expose-form input[type='radio'] { width: auto; }
+@media (max-width: 640px) { .tunnel-modes { grid-template-columns: 1fr; } }
+.tunnels-tab .seg button { display: inline-flex; align-items: center; gap: 6px; height: 30px; }

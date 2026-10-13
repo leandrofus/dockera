@@ -58,10 +58,7 @@ type exposeRT struct {
 	hs    *http.Server
 	proc  *cloudflare.Proc
 
-	// cached target address on the endpoint host
-	addr string
-	dial func(ctx context.Context, addr string) (net.Conn, error)
-	at   time.Time
+	target targetCache // where the container port answers
 }
 
 type exposures struct {
@@ -343,25 +340,11 @@ func (s *Server) resolveTarget(ctx context.Context, ep, container string, port i
 
 func (rt *exposeRT) dialTarget(s *Server, ctx context.Context) (net.Conn, error) {
 	rt.mu.Lock()
-	addr, dial, fresh := rt.addr, rt.dial, time.Since(rt.at) < targetMaxAge
 	x := rt.x
 	rt.mu.Unlock()
-	if !fresh || dial == nil {
-		var err error
-		if addr, dial, err = s.resolveTarget(ctx, x.Endpoint, x.Container, x.Port); err != nil {
-			return nil, err
-		}
-		rt.mu.Lock()
-		rt.addr, rt.dial, rt.at = addr, dial, time.Now()
-		rt.mu.Unlock()
-	}
-	conn, err := dial(ctx, addr)
-	if err != nil {
-		rt.mu.Lock()
-		rt.at = time.Time{} // look it up again next time (recreated container)
-		rt.mu.Unlock()
-	}
-	return conn, err
+	return rt.target.connect(ctx, func(ctx context.Context) (string, func(context.Context, string) (net.Conn, error), error) {
+		return s.resolveTarget(ctx, x.Endpoint, x.Container, x.Port)
+	})
 }
 
 // ---- the gate ----

@@ -262,4 +262,6 @@ var es = map[string]string{
 	"warning: could not prepare the start menu: %v\n":                                             "aviso: no se pudo preparar el menú inicio: %v\n",
 	"start menu: containers can be added from Settings → Access → Start menu\n":                   "menú inicio: se pueden agregar contenedores desde Configuración → Acceso → Menú inicio\n",
 	"the start menu is not prepared yet: run `sudo ducktainer setup`":                             "el menú inicio todavía no está preparado: ejecuta `sudo ducktainer setup`",
+	"pick between 1 hour and 30 days":                                                             "elige entre 1 hora y 30 días",
+	"unknown duration: %s":                                                                        "duración desconocida: %s",
 }

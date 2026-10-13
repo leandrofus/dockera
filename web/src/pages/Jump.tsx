@@ -14,6 +14,8 @@ import { isViewer } from '../lib/session'
 import { ExposureList, accessSummary, exposureMenu, openExpose } from '../components/Expose'
 import type { Exposure } from '../components/Expose'
 import { toggleShortcut, useShortcuts } from '../components/Shortcuts'
+import { DurationTag, TunnelList, closeTunnelAsk, durationText, editTunnel, openTunnelDialog, tunnelAddr, tunnelURL } from '../components/Tunnels'
+import type { Tunnel } from '../components/Tunnels'
 
 interface JumpEntry {
   container_id: string
@@ -42,16 +44,6 @@ interface JumpData {
   entries: JumpEntry[]
 }
 
-interface Tunnel {
-  id: string
-  endpoint: string
-  container_id: string
-  port: number
-  local_port: number
-  expires: string
-  active: number
-}
-
 // Overrides are keyed by stack/service (or container name), not by id, so
 // they survive a recreate.
 const linkKey = (ep: string, e: JumpEntry) => `${ep}/${e.stack && e.service ? e.stack + '/' + e.service : e.container}/${e.port}`
@@ -69,9 +61,7 @@ function defaultURL(e: JumpEntry, host: string) {
   return `${e.scheme || 'http'}://${a.host}:${a.port}`
 }
 
-// A tunnel listens on this ducktainer server, so it is reached at the page's host.
-const tunnelAddr = (tn: Tunnel) => ({ host: location.hostname, port: tn.local_port })
-const tunnelURL = (e: JumpEntry, tn: Tunnel) => `${e.scheme || 'http'}://${location.hostname}:${tn.local_port}`
+const tunURL = (e: JumpEntry, tn: Tunnel) => tunnelURL(tn, e.scheme || 'http')
 
 function connString(e: JumpEntry, host: string, tn?: Tunnel) {
   if (!e.conn) return ''
@@ -90,7 +80,9 @@ function Owner({ e }: { e: JumpEntry }) {
 
 export function Jump({ ep }: { ep: string }) {
   const { data, loading, error } = useResource<JumpData>(`/e/${enc(ep)}/jump`, { poll: 30000 })
-  const [tab, setTab] = usePref<'http' | 'tcp' | 'internet'>('jump.tab', 'http')
+  const [tab, setTab] = usePref<'http' | 'tcp' | 'tunnels'>('jump.tab', 'http')
+  const [tunTab, setTunTab] = usePref<'private' | 'public'>('jump.tunnels', 'private')
+  const [allHosts, setAllHosts] = usePref('jump.tunnels.all', false)
   const [internal, setInternal] = usePref('jump.internal', false)
   const [hosts, setHosts] = usePref<Record<string, string>>('jump.hosts', {})
   const [links, setLinks] = usePref<Record<string, string>>('jump.links', {})
@@ -119,7 +111,7 @@ export function Jump({ ep }: { ep: string }) {
 
   const urlOf = (e: JumpEntry) => links[linkKey(ep, e)] || defaultURL(e, host)
   const ekey = (e: JumpEntry) => e.container_id + ':' + e.port + '/' + e.proto
-  const tunOf = (e: JumpEntry) => tunnels?.find((x) => x.endpoint === ep && x.container_id === e.container_id && x.port === e.port)
+  const tunOf = (e: JumpEntry) => tunnels?.find((x) => x.endpoint === ep && x.container === e.container && x.port === e.port)
   const exposedOf = (e: JumpEntry) => (exposures || []).filter((x) => x.endpoint === ep && x.container === e.container && x.port === e.port)
   const canTunnel = !!data?.tunnel && !isViewer()
   // Nodes behind an agent (often NAT) and internal ports are reached through
@@ -128,7 +120,7 @@ export function Jump({ ep }: { ep: string }) {
   const openTunnel = async (e: JumpEntry) => {
     setOpening(ekey(e))
     try {
-      const tn = await api.post<Tunnel>(`/e/${enc(ep)}/tunnels`, { container_id: e.container_id, port: e.port, public_port: e.public_port || 0, host_ip: e.host_ip || '' })
+      const tn = await api.post<Tunnel>(`/e/${enc(ep)}/tunnels`, { container_id: e.container_id, container: e.container, port: e.port })
       invalidate('/tunnels')
       return tn
     } finally {
@@ -137,18 +129,18 @@ export function Jump({ ep }: { ep: string }) {
   }
   const openViaTunnel = (e: JumpEntry) => {
     const existing = tunOf(e)
-    if (existing) return void window.open(tunnelURL(e, existing), '_blank', 'noopener')
+    if (existing) return void window.open(tunURL(e, existing), '_blank', 'noopener')
     // open the tab now, inside the click, or the popup blocker eats it
     const w = window.open('about:blank', '_blank')
     openTunnel(e)
       .then((tn) => {
-        if (!w) return void window.open(tunnelURL(e, tn), '_blank', 'noopener')
+        if (!w) return void window.open(tunURL(e, tn), '_blank', 'noopener')
         w.opener = null
-        w.location.href = tunnelURL(e, tn)
+        w.location.href = tunURL(e, tn)
       })
       .catch((err) => (w?.close(), toast.err(err)))
   }
-  const closeTunnel = (tn: Tunnel) => api.del(`/tunnels/${tn.id}`).then(() => invalidate('/tunnels'), toast.err)
+  const closeTunnel = closeTunnelAsk
   const editLink = async (e: JumpEntry) => {
     const k = linkKey(ep, e)
     const v = await prompt({
@@ -193,8 +185,9 @@ export function Jump({ ep }: { ep: string }) {
     const tn = tunOf(e)
     return [
       canTunnel && 'sep',
-      canTunnel && !tn && { label: t('Open a tunnel'), icon: <ArrowLeftRight size={14} />, onClick: () => openTunnel(e).catch(toast.err) },
-      tn && { label: t('Close tunnel :{0}', tn.local_port), danger: true, onClick: () => closeTunnel(tn) },
+      canTunnel && !tn && { label: t('Open a tunnel…'), icon: <ArrowLeftRight size={14} />, onClick: () => openTunnelDialog(ep, { container: e.container, container_id: e.container_id, port: e.port, scheme: e.scheme }) },
+      tn && canTunnel && { label: t('Tunnel duration and access…'), icon: <Pencil size={14} />, onClick: () => editTunnel(tn) },
+      tn && canTunnel && { label: t('Close tunnel :{0}', tn.local_port), danger: true, onClick: () => closeTunnel(tn) },
     ]
   }
   const exposeMenu = (e: JumpEntry): MenuEntry[] => {
@@ -265,11 +258,11 @@ export function Jump({ ep }: { ep: string }) {
       </div>
       <Tabs
         active={tab}
-        onChange={(id) => setTab(id as 'http' | 'tcp' | 'internet')}
+        onChange={(id) => setTab(id as 'http' | 'tcp' | 'tunnels')}
         tabs={[
           { id: 'http', label: <><Globe size={13} /> HTTP</>, count: http.length },
           { id: 'tcp', label: <><Plug size={13} /> TCP/UDP</>, count: tcp.length },
-          { id: 'internet', label: <><Cloud size={13} /> {t('Internet')}</>, count: (exposures || []).filter((x) => x.endpoint === ep).length },
+          { id: 'tunnels', label: <><ArrowLeftRight size={13} /> {t('Tunnels')}</>, count: (tunnels || []).filter((x) => x.endpoint === ep).length + (exposures || []).filter((x) => x.endpoint === ep).length },
         ]}
       />
       <div className="page-body">
@@ -284,7 +277,7 @@ export function Jump({ ep }: { ep: string }) {
                 const custom = !!links[linkKey(ep, e)]
                 const tn = tunOf(e)
                 const viaTunnel = preferTunnel(e)
-                const url = viaTunnel && tn ? tunnelURL(e, tn) : urlOf(e)
+                const url = viaTunnel && tn ? tunURL(e, tn) : urlOf(e)
                 const reachable = !!e.public_port || custom || !!e.url || viaTunnel
                 return (
                   <div key={e.container_id + e.port + e.proto} className={`jump-card${reachable ? '' : ' disabled'}`} onContextMenu={menu(() => httpMenu(e))}>
@@ -310,7 +303,8 @@ export function Jump({ ep }: { ep: string }) {
                         <Tag mono>{e.public_port ? `${e.public_port} → ${e.port}` : `${e.port}`}</Tag>
                         {e.app && <Tag>{e.app}</Tag>}
                         {custom && <Tag tone="accent">{t('custom')}</Tag>}
-                        {tn && <Tag tone="ok" title={t('Tunnel open: only your address can use it; it closes after 30 min without connections')}>{t('tunnel :{0}', tn.local_port)}</Tag>}
+                        {tn && <Tag tone="ok" title={durationText(tn)} onContextMenu={menu(() => tunnelMenu(e))}>{t('tunnel :{0}', tn.local_port)}</Tag>}
+                        {tn && tn.mode !== 'idle' && <DurationTag tn={tn} />}
                         {!custom && e.url && <Tag tone="accent">{t('label')}</Tag>}
                         {exposedOf(e).map((x) => (
                           <Tag key={x.id} tone={x.access.login || x.has_link || x.access.ips?.length ? 'ok' : 'warn'} title={`${x.url || t('waiting for an address…')} · ${accessSummary(x)}`} onContextMenu={menu(() => exposureMenu(x))}>
@@ -330,7 +324,23 @@ export function Jump({ ep }: { ep: string }) {
             </div>
           )
         )}
-        {tab === 'internet' && <ExposureList ep={ep} />}
+        {tab === 'tunnels' && (
+          <div className="tunnels-tab">
+            <div className="row gap">
+              <div className="seg seg-text">
+                <button className={tunTab === 'private' ? 'on' : ''} onClick={() => setTunTab('private')} title={t('Port forwards through this ducktainer server')}>
+                  <Lock size={13} /> {t('Private tunnels')} <span className="muted">{(tunnels || []).filter((x) => allHosts || x.endpoint === ep).length}</span>
+                </button>
+                <button className={tunTab === 'public' ? 'on' : ''} onClick={() => setTunTab('public')} title={t('Published on the internet through Cloudflare')}>
+                  <Cloud size={13} /> {t('Public tunnels')} <span className="muted">{(exposures || []).filter((x) => allHosts || x.endpoint === ep).length}</span>
+                </button>
+              </div>
+              <span className="grow" />
+              <label className="check small"><input type="checkbox" checked={allHosts} onChange={(e) => setAllHosts(e.target.checked)} /> {t('All hosts')}</label>
+            </div>
+            {tunTab === 'private' ? <TunnelList ep={allHosts ? undefined : ep} all={allHosts && !isViewer()} /> : <ExposureList ep={allHosts ? undefined : ep} />}
+          </div>
+        )}
         {data && tab === 'tcp' && (
           tcp.length === 0 ? (
             <Empty icon={<Plug size={28} />} title={t('No TCP/UDP ports')}>{q ? t('Nothing matches the search.') : t('No running container publishes a non-web port.')}</Empty>
@@ -359,7 +369,7 @@ export function Jump({ ep }: { ep: string }) {
                             {!e.public_port && <Tag>{t('internal')}</Tag>}
                             {isLoopback(e.host_ip) && <Tag tone="warn">localhost</Tag>}
                             {tn && (
-                              <Tag tone="ok" title={t('Tunnel open: only your address can use it; it closes after 30 min without connections')}>
+                              <Tag tone="ok" title={durationText(tn)}>
                                 {t('tunnel :{0}', tn.local_port)}
                               </Tag>
                             )}
@@ -367,7 +377,7 @@ export function Jump({ ep }: { ep: string }) {
                               <button className="icon-btn" title={t('Close tunnel :{0}', tn.local_port)} onClick={() => closeTunnel(tn)}><X size={13} /></button>
                             ) : (
                               canTunnel && e.proto === 'tcp' && (
-                                <button className="btn btn-sm btn-ghost" disabled={opening === ekey(e)} title={t('Forward this port through ducktainer')} onClick={() => openTunnel(e).catch(toast.err)}>
+                                <button className="btn btn-sm btn-ghost" disabled={opening === ekey(e)} title={t('Forward this port through ducktainer')} onClick={() => openTunnelDialog(ep, { container: e.container, container_id: e.container_id, port: e.port })}>
                                   {opening === ekey(e) ? <Spinner /> : <ArrowLeftRight size={13} />} {t('Tunnel')}
                                 </button>
                               )

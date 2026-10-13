@@ -267,6 +267,7 @@ func cmdServe(args []string, openBrowser bool) error {
 	}
 	srv.Version = version
 	srv.Listen, srv.Expose, srv.TunnelPorts = *addr, *expose, *tunnelPorts
+	srv.StartTunnels()
 	srv.StartExposures()
 	defer srv.StopExposures()
 	srv.StartShortcuts()
