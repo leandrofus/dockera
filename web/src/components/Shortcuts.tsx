@@ -119,6 +119,14 @@ export function StartMenu() {
           </div>
         )}
       </div>
+      {info.os === 'linux' && (
+        <div className="alert">
+          <AppWindow size={15} />
+          <span>
+            {t('The first time, the desktop may not notice the new menu until you sign in again. On KDE you can refresh it right away with')} <code>kbuildsycoca6</code>{t('; after that, changes show up on their own.')}
+          </span>
+        </div>
+      )}
       <p className="help">
         {t('Only HTTP(S) ports published on this machine. Entries are kept up to date when containers are recreated; stopped ones keep theirs.')}{' '}
         <code>{info.dir}</code>
