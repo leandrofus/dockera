@@ -66,6 +66,7 @@ const variants = release
     const ua = navigator.userAgent
     let sys = /Windows/.test(ua) ? 'windows' : /Macintosh/.test(ua) ? 'darwin' : 'dnf'
     if (/arm64|aarch64/i.test(ua)) select.value = 'arm64'
+    const copy = root.querySelector<HTMLButtonElement>('[data-copy]')!
     const show = () => {
       tabs.forEach((b) => b.setAttribute('aria-selected', String(b.dataset.sys === sys)))
       root.querySelectorAll<HTMLElement>('pre[data-sys]').forEach((p) => {
@@ -74,10 +75,11 @@ const variants = release
       const pkg = sys === 'dnf' || sys === 'apt'
       root.querySelector<HTMLElement>('[data-after="pkg"]')!.hidden = !pkg
       root.querySelector<HTMLElement>('[data-after="bin"]')!.hidden = pkg
+      // a release without the file for this system shows a link, not a command
+      copy.hidden = !root.querySelector<HTMLElement>('pre[data-sys]:not([hidden])')?.dataset.text
     }
     tabs.forEach((b) => b.addEventListener('click', () => { sys = b.dataset.sys!; show() }))
     select.addEventListener('change', show)
-    const copy = root.querySelector<HTMLButtonElement>('[data-copy]')!
     copy.addEventListener('click', async () => {
       const text = root.querySelector<HTMLElement>('pre[data-sys]:not([hidden])')?.dataset.text
       if (!text) return

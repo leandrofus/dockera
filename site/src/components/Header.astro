@@ -1,0 +1,30 @@
+---
+import Icon from './Icon.astro'
+import { strings, type Lang } from '../i18n'
+import { REPO_URL, docsPath, homePath } from '../paths'
+import ship from '../assets/ship.png'
+
+interface Props {
+  lang: Lang
+  /** The same page in the other language. */
+  otherHref: string
+  /** Sits on the dark hero instead of the page background. */
+  onHero?: boolean
+  active?: 'docs'
+}
+const { lang, otherHref, onHero = false, active } = Astro.props
+const t = strings[lang]
+---
+<header class:list={['top', { 'on-hero': onHero }]}>
+  <nav class="wrap bar" aria-label={t.nav}>
+    <a class="brand" href={homePath(lang)}>
+      <img src={ship.src} alt="" width="46" height={Math.round(46 * ship.height / ship.width)} />
+      <span>ducktainer</span>
+    </a>
+    <span class="grow"></span>
+    <a href={docsPath(lang)} aria-current={active === 'docs' ? 'page' : undefined}>{t.docs}</a>
+    <a class="hide-sm" href={`${REPO_URL}/releases`}>{t.releases}</a>
+    <a href={REPO_URL} aria-label="GitHub"><Icon name="github" /></a>
+    <a class="lang" href={otherHref} hreflang={lang === 'en' ? 'es' : 'en'}>{t.otherLang}</a>
+  </nav>
+</header>

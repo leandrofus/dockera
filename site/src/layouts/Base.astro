@@ -8,8 +8,10 @@ interface Props {
   lang: Lang
   title: string
   description: string
+  /** The same page in the other language. */
+  otherHref: string
 }
-const { lang, title, description } = Astro.props
+const { lang, title, description, otherHref } = Astro.props
 const base = import.meta.env.BASE_URL.replace(/\/$/, '')
 const other = lang === 'en' ? 'es' : 'en'
 const ogImage = await getImage({ src: og, format: 'png' })
@@ -24,7 +26,7 @@ const ogImage = await getImage({ src: og, format: 'png' })
     <meta name="theme-color" content="#EAF4FC" media="(prefers-color-scheme: light)" />
     <meta name="theme-color" content="#0B1626" media="(prefers-color-scheme: dark)" />
     <link rel="icon" type="image/svg+xml" href={`${base}/favicon.svg`} />
-    <link rel="alternate" hreflang={other} href={new URL(other === 'en' ? `${base}/` : `${base}/es/`, Astro.site)} />
+    <link rel="alternate" hreflang={other} href={new URL(otherHref, Astro.site)} />
     <meta property="og:title" content={title} />
     <meta property="og:description" content={description} />
     <meta property="og:image" content={new URL(ogImage.src, Astro.site)} />
