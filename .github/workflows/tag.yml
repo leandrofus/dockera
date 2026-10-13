@@ -1,0 +1,40 @@
+name: Tag
+
+# Every merge to main: when web/package.json carries a version that has no
+# tag yet, tag it (v<version>) and start the release. Bump the version in the
+# PR to publish one; merges without a bump publish nothing.
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  actions: write # to start the release workflow
+
+concurrency:
+  group: tag
+
+jobs:
+  tag:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tag the new version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version=$(jq -r .version web/package.json)
+          case "$version" in
+            [0-9]*.[0-9]*.[0-9]*) ;;
+            *) echo "invalid version in web/package.json: $version" >&2; exit 1 ;;
+          esac
+          tag="v$version"
+          if git ls-remote --exit-code --tags origin "refs/tags/$tag" >/dev/null; then
+            echo "$tag already exists: nothing to release"
+            exit 0
+          fi
+          git tag "$tag" "$GITHUB_SHA"
+          git push origin "$tag"
+          # tags pushed with GITHUB_TOKEN do not trigger other workflows
+          gh workflow run release.yml --ref "$tag"
+          echo "tagged $tag and started the release" >> "$GITHUB_STEP_SUMMARY"

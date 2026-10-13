@@ -37,3 +37,7 @@ El inglés es el idioma de origen. Para añadir un idioma:
 
 1. Copia `web/src/i18n/es.ts` (UI) e `internal/i18n/es.go` (errores de la API y CLI). Las claves son los textos en inglés; las claves `ctx|texto` son variantes de género y número que usa `tc()`.
 2. Registra el nuevo catálogo en `web/src/i18n/index.ts` y en `internal/i18n/i18n.go`.
+
+## Versiones
+
+La versión está en `web/package.json`. Para publicar una, súbela en tu pull request: cuando el merge llega a `main`, el workflow Tag crea el tag `v<versión>` y lanza el release, que compila los paquetes y binarios y reconstruye este sitio. Los merges que no cambian la versión no publican nada.

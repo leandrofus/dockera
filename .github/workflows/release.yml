@@ -1,11 +1,14 @@
 name: Release
 
-# Push a tag like v0.2.0: builds the rpm/deb packages (amd64, arm64, with
-# PAM) and the static binaries, and attaches them to the GitHub release,
-# plus version-less "latest" copies of the packages for stable links.
+# Runs on a tag like v0.2.0: tag.yml creates it (and starts this workflow)
+# when a version bump reaches main; pushing one by hand works too. Builds the
+# rpm/deb packages (amd64, arm64, with PAM) and the static binaries, and
+# attaches them to the GitHub release, plus version-less "latest" copies of
+# the packages for stable links.
 on:
   push:
     tags: ['v*']
+  workflow_dispatch: # tag.yml, on the new tag
 
 permissions:
   contents: write
@@ -16,6 +19,8 @@ concurrency:
 
 jobs:
   release:
+    # a manual run on a branch must not publish anything
+    if: startsWith(github.ref, 'refs/tags/v')
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
