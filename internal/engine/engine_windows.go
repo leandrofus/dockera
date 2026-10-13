@@ -177,6 +177,11 @@ func installNative(ctx context.Context, o Options) (Result, error) {
 		i18n.Fprintf(o.Out, "warning: could not add %s to PATH: %v\n", dir, err)
 	}
 
+	// a docker service removed earlier can leave its event log source
+	// behind, and then dockerd refuses to register
+	if _, err := powershell(ctx, `Remove-Item -Path 'HKLM:\SYSTEM\CurrentControlSet\Services\EventLog\Application\docker' -Recurse -ErrorAction SilentlyContinue`); err != nil {
+		i18n.Fprintf(o.Out, "warning: %v\n", err)
+	}
 	if _, err := run(ctx, o.Out, "", filepath.Join(dir, "dockerd.exe"), "--register-service"); err != nil {
 		return res, err
 	}
