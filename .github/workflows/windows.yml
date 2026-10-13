@@ -94,7 +94,9 @@ jobs:
       - name: The distribution keeps running without a terminal attached
         shell: pwsh
         run: |
-          Start-Sleep -Seconds 30
-          $out = .\ducktainer.exe ps -e wsl | Out-String
-          if ($out -notmatch 'squeak-wsl') { throw 'the container stopped with the distribution' }
-          wsl.exe -l -v
+          # WSL stops idle distributions after a few seconds; the keepalive
+          # started by the installer must prevent it
+          Start-Sleep -Seconds 45
+          $running = wsl.exe -d ducktainer -u root -- docker inspect -f '{{.State.Running}}' squeak-wsl
+          "running: $running"
+          if ($running -ne 'true') { throw 'the container stopped with the distribution' }
