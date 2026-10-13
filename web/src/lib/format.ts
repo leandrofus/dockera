@@ -1,4 +1,4 @@
-import { getLang, t } from '../i18n'
+import { getLang, t, tc } from '../i18n'
 import type { Container } from './types'
 
 export function bytes(n?: number, digits = 1) {
@@ -39,7 +39,7 @@ export function humanStatus(s: string) {
   if (getLang() === 'en') return s
   const units: [RegExp, string][] = [
     [/Less than a second/, t('less than 1 s')], [/About a minute/, t('1 minute')], [/About an hour/, t('1 hour')], [/An? (\w+)/, '1 $1'],
-    [/seconds?/, 's'], [/minutes?/, 'min'], [/hours?/, 'h'], [/days?/, t('days')], [/weeks?/, t('weeks')], [/months?/, t('months')], [/years?/, t('years')],
+    [/seconds?/, tc('unit', 's')], [/minutes?/, tc('unit', 'min')], [/hours?/, tc('unit', 'h')], [/days?/, t('days')], [/weeks?/, t('weeks')], [/months?/, t('months')], [/years?/, t('years')],
   ]
   let out = s
   for (const [re, rep] of units) out = out.replace(re, rep)
