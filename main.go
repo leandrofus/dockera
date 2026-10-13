@@ -1024,6 +1024,7 @@ func cmdSetup(args []string) error {
 		i18n.Printf("warning: could not prepare the start menu: %v\n", err)
 	} else if ok && !*quiet {
 		i18n.Printf("start menu: containers can be added from Settings → Access → Start menu\n")
+		i18n.Printf("  (open desktop sessions see the new menu after signing in again; on KDE, `kbuildsycoca6` refreshes it now)\n")
 	}
 	if !*quiet {
 		if plan.Mode == setup.ModeNone {

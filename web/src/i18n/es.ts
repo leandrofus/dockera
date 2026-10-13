@@ -1212,4 +1212,6 @@ export const es: Record<string, string> = {
   "{0} h": "{0} h",
   "Public tunnels": "Públicos",
   "Private tunnels": "Privados",
+  "The first time, the desktop may not notice the new menu until you sign in again. On KDE you can refresh it right away with": "La primera vez, el escritorio puede no ver el menú nuevo hasta que vuelvas a iniciar sesión. En KDE puedes actualizarlo enseguida con",
+  "; after that, changes show up on their own.": "; después, los cambios aparecen solos.",
 }
