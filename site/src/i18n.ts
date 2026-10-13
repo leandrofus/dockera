@@ -22,7 +22,7 @@ const en = {
   copy: 'Copy',
   copied: 'Copied',
   afterPkg: 'Then open <code>http://127.0.0.1:9900</code> and sign in with a user in the <code>docker</code> or <code>ducktainer-admins</code> group.',
-  afterBin: 'No PAM: sign in with the token it prints at startup. For system users, use the rpm or deb package.',
+  afterBin: 'No PAM: sign in with the token it prints at startup. For system users, use the rpm or deb package. On Windows, <code>engine install</code> sets up Docker without Docker Desktop (run it as administrator; <code>--mode native</code> for Windows containers).',
   noRelease: 'Download the latest version from <a href="https://github.com/leandrofus/ducktainer/releases/latest">the releases page</a>.',
   featuresTitle: 'What you get in the browser',
   features: [
@@ -72,7 +72,7 @@ const es: Strings = {
   copy: 'Copiar',
   copied: 'Copiado',
   afterPkg: 'Después abre <code>http://127.0.0.1:9900</code> y entra con un usuario de los grupos <code>docker</code> o <code>ducktainer-admins</code>.',
-  afterBin: 'Sin PAM: se entra con el token que imprime al arrancar. Para usuarios del sistema, usa el paquete rpm o deb.',
+  afterBin: 'Sin PAM: se entra con el token que imprime al arrancar. Para usuarios del sistema, usa el paquete rpm o deb. En Windows, <code>engine install</code> instala Docker sin Docker Desktop (ejecútalo como administrador; <code>--mode native</code> para contenedores Windows).',
   noRelease: 'Descarga la última versión desde <a href="https://github.com/leandrofus/ducktainer/releases/latest">la página de versiones</a>.',
   featuresTitle: 'Lo que tienes en el navegador',
   features: [

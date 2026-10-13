@@ -45,7 +45,8 @@ export function installCommands(rel: Release, sys: System, arch: Arch): string[]
       return a ? [`curl -fLO ${a.url}`, `sudo apt install ./${a.name}`] : null
     case 'windows':
       a = find(new RegExp(`^ducktainer-windows-${arch}\\.exe$`))
-      return a ? [`curl.exe -fLo ducktainer.exe ${a.url}`, '.\\ducktainer.exe serve'] : null
+      // no Docker Desktop needed: engine install sets up Docker in WSL 2
+      return a ? [`curl.exe -fLo ducktainer.exe ${a.url}`, '.\\ducktainer.exe engine install', '.\\ducktainer.exe ui'] : null
     default:
       a = find(new RegExp(`^ducktainer-${sys}-${arch}$`))
       return a ? [`curl -fLo ducktainer ${a.url}`, 'chmod +x ducktainer && ./ducktainer serve'] : null

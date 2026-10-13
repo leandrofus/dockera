@@ -38,6 +38,19 @@ El paquete:
 ./ducktainer serve       # http://127.0.0.1:9900; muestra el token
 ```
 
+**Windows sin Docker Desktop.** `ducktainer engine` instala el Docker Engine libre por ti, desde una terminal de administrador:
+
+```powershell
+.\ducktainer.exe engine install                 # contenedores Linux: Docker en una distribución WSL 2 propia
+.\ducktainer.exe engine install --mode native   # contenedores Windows: dockerd.exe como servicio de Windows
+.\ducktainer.exe engine status
+.\ducktainer.exe ui
+```
+
+- `wsl` (por defecto) crea la distribución WSL 2 `ducktainer` con la imagen de Ubuntu (verificada con su SHA256SUMS), corre `docker.io` con systemd y añade el host `wsl` (`wsl://ducktainer`). Una tarea al iniciar sesión mantiene la distribución en marcha, para que los contenedores no se paren cuando WSL la apagaría. Las distribuciones WSL son de un usuario: ejecuta ducktainer con ese usuario.
+- `native` activa la característica Containers (y Hyper-V en Windows 10/11), instala `dockerd.exe`, `docker.exe` y el plugin compose en `C:\Program Files\Docker`, registra el servicio `docker` y apunta el host `local` a `npipe:////./pipe/docker_engine`. Windows Home no tiene Containers: usa `wsl`.
+- Si Windows pide reiniciar (para activar WSL o una característica), reinicia y vuelve a ejecutar el mismo comando.
+
 ### 2. Comprobar cómo llega a Docker
 
 ```sh

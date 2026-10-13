@@ -39,6 +39,19 @@ The package:
 ./ducktainer ui               # same, and opens the browser
 ```
 
+**Windows without Docker Desktop.** `ducktainer engine` installs the open-source Docker Engine for you, from an administrator terminal:
+
+```powershell
+.\ducktainer.exe engine install                 # Linux containers: Docker in a WSL 2 distribution of its own
+.\ducktainer.exe engine install --mode native   # Windows containers: dockerd.exe as a Windows service
+.\ducktainer.exe engine status
+.\ducktainer.exe ui
+```
+
+- `wsl` (the default) creates the `ducktainer` WSL 2 distribution from Ubuntu's image (checked against Ubuntu's SHA256SUMS), runs `docker.io` there with systemd and adds the `wsl` host (`wsl://ducktainer`). A logon task keeps the distribution running, so containers don't stop when WSL would shut it down. WSL distributions belong to a user: run ducktainer as that user.
+- `native` enables the Containers feature (and Hyper-V on Windows 10/11), installs `dockerd.exe`, `docker.exe` and the compose plugin in `C:\Program Files\Docker`, registers the `docker` service and points the `local` host at `npipe:////./pipe/docker_engine`. Windows Home has no Containers feature: use `wsl`.
+- If Windows needs a restart (to enable WSL or a feature), restart and run the same command again.
+
 ### 2. Check how ducktainer reaches Docker
 
 ```sh
@@ -151,6 +164,7 @@ ducktainer controls the Docker API of every host, which is equivalent to root on
 | `ducktainer serve` | Web UI + API (`--listen`, `--allow`, `--tls auto\|on\|off`, `--cert/--key`, `--expose :2376`, `--agent-listen :9901`) |
 | `ducktainer agent` | Outbound agent (`--server`, `--name`, `--fingerprint`, `--socket`, `--install-service`; token in `DUCKTAINER_AGENT_TOKEN`) |
 | `ducktainer expose` | Publish only the Docker API, protected (allowlist + token + TLS; `--read-only`, `--no-exec`) |
+| `ducktainer engine install [--mode wsl\|native] \| status` | Windows: install Docker without Docker Desktop |
 | `ducktainer setup [--dry-run]` | Adapt the service to the Docker installation |
 | `ducktainer auth show \| set … \| test <user>` | System-user sign-in and role mapping |
 | `ducktainer allow ls \| add \| rm` | Network allowlist |
