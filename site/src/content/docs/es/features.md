@@ -37,6 +37,26 @@ Quién usa cada volumen, huérfanos, tamaños y navegación por su contenido.
 
 Unas 26 apps incluidas más cualquier lista de plantillas de Portainer v2/v3. Las listas oficial y de la comunidad, unas 800 apps, vienen preconfiguradas. Cada app se despliega como un stack editable.
 
+## Exponer a internet (Cloudflare)
+
+Haz clic derecho en un puerto web en **Accesos** y elige **Exponer a internet…**. ducktainer ejecuta `cloudflared` él mismo (el instalado, o una descarga fijada y con checksum verificado), así que no agrega nada a tus hosts de Docker. También funciona con puertos internos y con hosts detrás de un agente.
+
+- **Túnel rápido**, sin cuenta: una dirección aleatoria de `trycloudflare.com` que cambia cuando ducktainer se reinicia.
+- **Tu dominio**: conecta una cuenta de Cloudflare en **Configuración → Cloudflare** con un token de API (Cloudflare Tunnel: Edit, DNS: Edit, Zone: Read). ducktainer crea un túnel para el servidor, y cada exposición recibe un nombre como `app.ejemplo.com` con su propio registro DNS.
+
+Quién puede abrirlo:
+
+- **Público**: cualquiera que tenga la dirección.
+- **Iniciar sesión con una cuenta del sistema**: todos los que pueden usar ducktainer, o solo algunos usuarios o grupos.
+- **Link secreto**: quien lo abre entra, sin cuenta. Un link nuevo revoca el anterior.
+- **Solo desde estas direcciones**: IPs, rangos CIDR o nombres de host. Esta regla se combina con las anteriores y deben cumplirse ambas.
+
+Las exposiciones pueden cerrarse solas después de un tiempo. Se listan en la pestaña **Internet** de Accesos y en Configuración → Cloudflare, y los inicios de sesión quedan en la auditoría.
+
+## Menú inicio
+
+En una máquina con escritorio (Linux o Windows), **Configuración → Acceso → Menú inicio** agrega al menú las apps web de sus propios contenedores. En Linux van en un submenú "Containers"; en Windows, en Inicio › Programas › Containers. Cada entrada abre `http://localhost:<puerto>` en el navegador predeterminado. Elige los contenedores uno a uno (también desde el menú de Accesos), o deja que ducktainer agregue todos los contenedores web. Las entradas siguen a los contenedores cuando se recrean.
+
 ## Auditoría
 
 Cada inicio de sesión, cada cambio y cada sesión de terminal queda registrado, en **Configuración → Auditoría** y en `journalctl -u ducktainer`.

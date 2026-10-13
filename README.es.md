@@ -22,9 +22,16 @@ Se entra con los **usuarios del sistema** (PAM), y el acceso por red se limita a
 **Paquetes (recomendado).** Sirven para RHEL/Alma/Rocky 9+, Fedora, Debian 12+ y Ubuntu 22.04+ (amd64 y arm64). Docker tiene que estar instalado: el paquete depende de él.
 
 ```sh
-sudo dnf install ./ducktainer-0.1.0-1.x86_64.rpm     # RHEL / Fedora
-sudo apt install ./ducktainer_0.1.0-1_amd64.deb      # Debian / Ubuntu
+# RHEL / Fedora
+curl -fLO https://github.com/leandrofus/ducktainer/releases/latest/download/ducktainer-latest.x86_64.rpm
+sudo dnf install ./ducktainer-latest.x86_64.rpm
+
+# Debian / Ubuntu
+curl -fLO https://github.com/leandrofus/ducktainer/releases/latest/download/ducktainer_latest_amd64.deb
+sudo apt install ./ducktainer_latest_amd64.deb
 ```
+
+En arm64 usa `ducktainer-latest.aarch64.rpm` o `ducktainer_latest_arm64.deb`. Estos enlaces apuntan siempre a la última versión.
 
 El paquete:
 

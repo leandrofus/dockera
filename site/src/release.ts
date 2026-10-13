@@ -32,23 +32,35 @@ export async function latestRelease(): Promise<Release | null> {
 export type System = 'dnf' | 'apt' | 'linux' | 'darwin' | 'windows'
 export type Arch = 'amd64' | 'arm64'
 
+// Stable names: releases/latest/download/<name> always serves the newest
+// release, so the commands keep working between site builds. Packages got
+// version-less "latest" copies in later releases; older ones fall back to
+// their own versioned file.
+const latestURL = (name: string) => `https://github.com/${REPO}/releases/latest/download/${name}`
+
 /** The commands that download and install a release on a system. */
 export function installCommands(rel: Release, sys: System, arch: Arch): string[] | null {
   const find = (re: RegExp) => rel.assets.find((a) => re.test(a.name))
   let a: Asset | undefined
   switch (sys) {
-    case 'dnf':
-      a = find(new RegExp(`\\.${arch === 'arm64' ? 'aarch64' : 'x86_64'}\\.rpm$`))
+    case 'dnf': {
+      const rpmArch = arch === 'arm64' ? 'aarch64' : 'x86_64'
+      a = find(new RegExp(`^ducktainer-latest\\.${rpmArch}\\.rpm$`))
+      if (a) return [`curl -fLO ${latestURL(a.name)}`, `sudo dnf install ./${a.name}`]
+      a = find(new RegExp(`\\.${rpmArch}\\.rpm$`))
       return a ? [`curl -fLO ${a.url}`, `sudo dnf install ./${a.name}`] : null
+    }
     case 'apt':
+      a = find(new RegExp(`^ducktainer_latest_${arch}\\.deb$`))
+      if (a) return [`curl -fLO ${latestURL(a.name)}`, `sudo apt install ./${a.name}`]
       a = find(new RegExp(`_${arch}\\.deb$`))
       return a ? [`curl -fLO ${a.url}`, `sudo apt install ./${a.name}`] : null
     case 'windows':
       a = find(new RegExp(`^ducktainer-windows-${arch}\\.exe$`))
       // no Docker Desktop needed: engine install sets up Docker in WSL 2
-      return a ? [`curl.exe -fLo ducktainer.exe ${a.url}`, '.\\ducktainer.exe engine install', '.\\ducktainer.exe ui'] : null
+      return a ? [`curl.exe -fLo ducktainer.exe ${latestURL(a.name)}`, '.\\ducktainer.exe engine install', '.\\ducktainer.exe ui'] : null
     default:
       a = find(new RegExp(`^ducktainer-${sys}-${arch}$`))
-      return a ? [`curl -fLo ducktainer ${a.url}`, 'chmod +x ducktainer && ./ducktainer serve'] : null
+      return a ? [`curl -fLo ducktainer ${latestURL(a.name)}`, 'chmod +x ducktainer && ./ducktainer serve'] : null
   }
 }
