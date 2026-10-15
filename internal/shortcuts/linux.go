@@ -6,6 +6,7 @@ import (
 	_ "embed"
 	"fmt"
 	"os"
+	"os/exec"
 	"os/user"
 	"path/filepath"
 	"strconv"
@@ -78,7 +79,7 @@ func InstallSystem() (bool, error) {
 			return false, err
 		}
 	}
-	return true, nil
+	return true, installWatcher()
 }
 
 func dataHome() string {
@@ -101,11 +102,93 @@ func detect() Info {
 			info.Reason = "the start menu is not prepared yet: run `sudo ducktainer setup`"
 			return info
 		}
+		_, err := os.Stat(filepath.Join(watcherDir, watcherUnit))
+		info.Refreshed = err == nil
 	} else {
 		info.Scope, info.Dir = "user", filepath.Join(dataHome(), "applications", "ducktainer-containers")
+		info.Refreshed = true // refreshMenu, in this same session
 	}
 	info.Supported = true
 	return info
+}
+
+// KDE's menu cache (ksycoca) doesn't notice entries added to or removed
+// from a subdirectory of applications/, so it has to be rebuilt after each
+// change. A user's own ducktainer does it right away; the service can't
+// reach anyone's session, so `ducktainer setup` installs a systemd user unit
+// for every user that watches the system directory and rebuilds it.
+var refreshMenu = func(info Info) {
+	if info.Scope != "user" {
+		return // the watcher does it
+	}
+	for _, b := range []string{"kbuildsycoca6", "kbuildsycoca5"} {
+		if p, err := exec.LookPath(b); err == nil {
+			cmd := exec.Command(p, "--noincremental")
+			if cmd.Start() == nil {
+				go cmd.Wait()
+			}
+			return
+		}
+	}
+}
+
+const (
+	watcherDir  = "/etc/systemd/user"
+	watcherUnit = "ducktainer-menu.path"
+)
+
+var watcherFiles = map[string]string{
+	watcherUnit: `[Unit]
+Description=Refresh the start menu when ducktainer changes its container entries
+
+[Path]
+PathModified=` + SystemDir + `
+
+[Install]
+WantedBy=default.target
+`,
+	"ducktainer-menu.service": `[Unit]
+Description=Refresh the start menu (container entries of ducktainer)
+
+[Service]
+Type=oneshot
+ExecStart=/bin/sh -c 'for b in kbuildsycoca6 kbuildsycoca5; do command -v $$b >/dev/null && exec $$b --noincremental; done; exit 0'
+`,
+}
+
+// installWatcher installs the watcher for every user, starts it in the open
+// sessions and refreshes their menus now.
+func installWatcher() error {
+	if _, err := exec.LookPath("systemctl"); err != nil {
+		return nil // no systemd: menus refresh at the next sign-in
+	}
+	for name, data := range watcherFiles {
+		p := filepath.Join(watcherDir, name)
+		if prev, err := os.ReadFile(p); err == nil && string(prev) == data {
+			continue
+		}
+		if err := os.MkdirAll(watcherDir, 0o755); err != nil {
+			return err
+		}
+		if err := os.WriteFile(p, []byte(data), 0o644); err != nil {
+			return err
+		}
+	}
+	if out, err := exec.Command("systemctl", "--global", "enable", watcherUnit).CombinedOutput(); err != nil {
+		return fmt.Errorf("systemctl --global enable %s: %v: %s", watcherUnit, err, strings.TrimSpace(string(out)))
+	}
+	out, _ := exec.Command("loginctl", "list-users", "--no-legend").Output()
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		if len(f) < 2 || f[0] == "0" {
+			continue
+		}
+		m := "--machine=" + f[1] + "@"
+		exec.Command("systemctl", "--user", m, "daemon-reload").Run()
+		exec.Command("systemctl", "--user", m, "start", watcherUnit).Run()
+		exec.Command("systemctl", "--user", m, "start", "ducktainer-menu.service").Run()
+	}
+	return nil
 }
 
 // prepare installs the submenu and the icon for a user (the packages ship

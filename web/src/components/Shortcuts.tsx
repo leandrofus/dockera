@@ -22,7 +22,7 @@ interface Candidate extends ShortcutRef {
 }
 
 export interface ShortcutsInfo {
-  info: { supported: boolean; reason?: string; dir?: string; scope?: 'user' | 'system'; menu?: string; os: string }
+  info: { supported: boolean; reason?: string; dir?: string; scope?: 'user' | 'system'; menu?: string; os: string; refreshed: boolean }
   all: boolean
   candidates: Candidate[]
 }
@@ -119,11 +119,11 @@ export function StartMenu() {
           </div>
         )}
       </div>
-      {info.os === 'linux' && (
-        <div className="alert">
+      {!info.refreshed && (
+        <div className="alert alert-warn">
           <AppWindow size={15} />
           <span>
-            {t('The first time, the desktop may not notice the new menu until you sign in again. On KDE you can refresh it right away with')} <code>kbuildsycoca6</code>{t('; after that, changes show up on their own.')}
+            {t('The desktop menu does not refresh by itself yet (KDE only notices the changes after rebuilding it). Run this once: it installs a watcher that refreshes the menu of every user, including the sessions already open.')} <code>sudo ducktainer setup</code>
           </span>
         </div>
       )}

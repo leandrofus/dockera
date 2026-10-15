@@ -1212,8 +1212,6 @@ export const ru: Record<string, string> = {
   "{0} h": "{0} ч",
   "Public tunnels": "Публичные туннели",
   "Private tunnels": "Частные туннели",
-  "The first time, the desktop may not notice the new menu until you sign in again. On KDE you can refresh it right away with": "При первом запуске рабочий стол может не увидеть новое меню, пока вы не войдёте в систему снова. В KDE можно сразу обновить его командой",
-  "; after that, changes show up on their own.": "; после этого изменения появляются сами.",
   "unit|s": "с",
   "unit|min": "мин",
   "unit|h": "ч",
@@ -1438,4 +1436,5 @@ export const ru: Record<string, string> = {
   "Skip this if the person already has an account on this computer (or in your domain). Run the commands in a terminal opened as administrator.": "Пропустите этот шаг, если у человека уже есть учётная запись на этом компьютере (или в вашем домене). Выполняйте команды в терминале, открытом от имени администратора.",
   "Windows accounts (local or of the domain) whose local groups map to a role.": "Учётные записи Windows (локальные или доменные), локальные группы которых сопоставлены с ролью.",
   "Windows accounts of this computer or its domain, with the role of their local groups.": "Учётные записи Windows этого компьютера или его домена с ролью их локальных групп.",
+  "The desktop menu does not refresh by itself yet (KDE only notices the changes after rebuilding it). Run this once: it installs a watcher that refreshes the menu of every user, including the sessions already open.": "Меню рабочего стола пока не обновляется само (KDE замечает изменения только после его перестройки). Выполните это один раз: команда установит наблюдатель, который обновляет меню всех пользователей, включая уже открытые сеансы.",
 }

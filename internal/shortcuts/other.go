@@ -13,3 +13,5 @@ func fileName(it Item, _ map[string]bool) string { return safeName(it.Name) }
 func render(Item) (string, error)                { return "", nil }
 
 func InstallSystem() (bool, error) { return false, nil }
+
+var refreshMenu = func(Info) {}

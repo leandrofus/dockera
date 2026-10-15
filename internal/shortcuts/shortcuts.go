@@ -31,6 +31,9 @@ type Info struct {
 	Scope     string `json:"scope,omitempty"` // user | system
 	Menu      string `json:"menu,omitempty"`  // where people find them
 	OS        string `json:"os"`
+	// Refreshed: the desktop's menu picks up changes by itself (on Linux
+	// the system menu needs the watcher `ducktainer setup` installs).
+	Refreshed bool `json:"refreshed"`
 }
 
 // Detect inspects the desktop (cheap: files and environment only).
@@ -81,6 +84,7 @@ func Sync(items []Item, keep []string) error {
 	used := map[string]bool{}
 	sort.Slice(items, func(i, j int) bool { return items[i].Key < items[j].Key })
 	var errs []error
+	changed := false
 	for _, it := range items {
 		name := fileName(it, used)
 		used[strings.ToLower(name)] = true
@@ -95,6 +99,7 @@ func Sync(items []Item, keep []string) error {
 				errs = append(errs, err)
 				continue
 			}
+			changed = true
 		}
 		next[it.Key] = name
 	}
@@ -106,8 +111,13 @@ func Sync(items []Item, keep []string) error {
 	}
 	for k, f := range old {
 		if next[k] != f && !used[strings.ToLower(f)] && filepath.Base(f) == f {
-			os.Remove(filepath.Join(info.Dir, f))
+			if os.Remove(filepath.Join(info.Dir, f)) == nil {
+				changed = true
+			}
 		}
+	}
+	if changed {
+		refreshMenu(info)
 	}
 	if err := next.save(); err != nil {
 		errs = append(errs, err)

@@ -1212,8 +1212,6 @@ export const es: Record<string, string> = {
   "{0} h": "{0} h",
   "Public tunnels": "Públicos",
   "Private tunnels": "Privados",
-  "The first time, the desktop may not notice the new menu until you sign in again. On KDE you can refresh it right away with": "La primera vez, el escritorio puede no ver el menú nuevo hasta que vuelvas a iniciar sesión. En KDE puedes actualizarlo enseguida con",
-  "; after that, changes show up on their own.": "; después, los cambios aparecen solos.",
   "Hostname": "Nombre de host",
   "Test": "Comando de prueba",
   "Timeout": "Tiempo de espera",
@@ -1429,4 +1427,5 @@ export const es: Record<string, string> = {
   "Skip this if the person already has an account on this computer (or in your domain). Run the commands in a terminal opened as administrator.": "Omite este paso si la persona ya tiene una cuenta en este equipo (o en tu dominio). Ejecuta los comandos en una terminal abierta como administrador.",
   "Windows accounts (local or of the domain) whose local groups map to a role.": "Cuentas de Windows (locales o del dominio) cuyos grupos locales se asignan a un rol.",
   "Windows accounts of this computer or its domain, with the role of their local groups.": "Cuentas de Windows de este equipo o de su dominio, con el rol de sus grupos locales.",
+  "The desktop menu does not refresh by itself yet (KDE only notices the changes after rebuilding it). Run this once: it installs a watcher that refreshes the menu of every user, including the sessions already open.": "El menú del escritorio todavía no se actualiza solo (KDE solo ve los cambios después de reconstruirlo). Ejecuta esto una vez: instala un vigilante que actualiza el menú de todos los usuarios, incluidas las sesiones ya abiertas.",
 }

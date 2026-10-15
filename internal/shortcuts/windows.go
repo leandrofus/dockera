@@ -31,7 +31,7 @@ func detect() Info {
 		}
 		info.Scope, info.Dir = "system", filepath.Join(pd, `Microsoft\Windows\Start Menu\Programs\Containers`)
 	}
-	info.Supported = true
+	info.Supported, info.Refreshed = true, true // Explorer watches the Start menu
 	return info
 }
 
@@ -56,3 +56,5 @@ func render(it Item) (string, error) {
 
 // InstallSystem: nothing to prepare on Windows.
 func InstallSystem() (bool, error) { return false, nil }
+
+var refreshMenu = func(Info) {}
