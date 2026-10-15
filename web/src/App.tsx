@@ -3,9 +3,10 @@ import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Home as HomeIcon, Box, Layers, Image as ImageIcon, Network as NetIcon, HardDrive, Store, Activity as ActIcon, Settings as Cog,
   Search, Plus, ChevronsUpDown, Zap, Languages, Star, Clock, LogOut, Moon, Sun, Server, Check, Download, PanelLeftClose, PanelLeft, Rocket,
+  Boxes, KeyRound, FileText, Network as ClusterIcon,
 } from 'lucide-react'
 import { api, enc, setUnauthorizedHandler, stream } from './lib/api'
-import type { Container, Endpoint, Image, Network, Stack, Volume } from './lib/types'
+import type { Container, Endpoint, Image, Network, Service, Stack, SwarmNode, SwarmStack, Volume } from './lib/types'
 import { invalidate, peek, useResource } from './lib/store'
 import { usePref } from './lib/prefs'
 import { cname, shortId, stackOf } from './lib/format'
@@ -16,7 +17,7 @@ import { OverlayHost, openDialog, toast } from './ui/overlays'
 import { Avatar, Kbd, Spinner } from './ui/common'
 import { getMe, isViewer, setMe } from './lib/session'
 import type { Me } from './lib/session'
-import { containerActions, imageActions, networkActions, stackActions, volumeActions, pullImage } from './actions'
+import { containerActions, imageActions, networkActions, stackActions, volumeActions, pullImage, serviceActions, nodeActions, nodeName, swarmStackActions, serviceImage } from './actions'
 import type { Fav } from './actions'
 import { ContainerFormDialog } from './components/ContainerForm'
 import { Home, Activity } from './pages/Home'
@@ -26,10 +27,15 @@ import { ContainerRecord } from './pages/ContainerRecord'
 import { Stacks, StackRecord, NewStackDialog } from './pages/Stacks'
 import { Images, ImageRecord, Networks, NetworkRecord, Volumes, VolumeRecord } from './pages/Resources'
 import { Marketplace } from './pages/Marketplace'
+import { NewServiceDialog, NewSwarmStackDialog, NodeRecord, Nodes, ServiceRecord, Services, SwarmObjectRecord, SwarmObjects, SwarmOverview, SwarmStackRecord, SwarmStacks, useSwarm } from './pages/Swarm'
 import { Settings, Login } from './pages/Settings'
 import { prompt } from './ui/overlays'
 
-const SECTION_LABEL: Record<string, string> = { containers: tr('container'), stacks: 'stack', images: tr('image'), networks: tr('network'), volumes: tr('volume') }
+const SECTION_LABEL: Record<string, string> = {
+  containers: tr('container'), stacks: 'stack', images: tr('image'), networks: tr('network'), volumes: tr('volume'),
+  services: tr('service'), nodes: tr('node'), secrets: 'secret', configs: 'config', 'swarm-stacks': 'swarm stack',
+}
+const RECORD_SECTIONS = ['containers', 'stacks', 'images', 'networks', 'volumes', 'services', 'nodes', 'secrets', 'configs', 'swarm-stacks']
 
 type Recent = { ep: string; section: string; id: string; label: string }
 
@@ -41,6 +47,16 @@ const NAV = [
   { id: 'images', label: tr('Images'), icon: ImageIcon },
   { id: 'networks', label: tr('Networks'), icon: NetIcon },
   { id: 'volumes', label: tr('Volumes'), icon: HardDrive },
+] as const
+
+// Shown when the host is part of a swarm (only the overview on workers).
+const SWARM_NAV = [
+  { id: 'swarm', label: tr('Cluster'), icon: ClusterIcon },
+  { id: 'services', label: tr('Services'), icon: Boxes },
+  { id: 'swarm-stacks', label: tr('Swarm stacks'), icon: Layers },
+  { id: 'nodes', label: tr('Nodes'), icon: Server },
+  { id: 'secrets', label: 'Secrets', icon: KeyRound },
+  { id: 'configs', label: 'Configs', icon: FileText },
 ] as const
 
 const NAV2 = [
@@ -57,6 +73,12 @@ function labelFor(ep: string, section: string, id: string) {
   }
   if (section === 'networks') return peek<Network[]>(`/e/${e}/networks`)?.find((x) => x.Id === id)?.Name ?? shortId(id)
   if (section === 'images') return peek<Image[]>(`/e/${e}/images`)?.find((x) => x.Id === id)?.RepoTags?.[0] ?? shortId(id)
+  if (section === 'services') return peek<Service[]>(`/e/${e}/services`)?.find((x) => x.ID === id)?.Spec.Name ?? shortId(id)
+  if (section === 'nodes') {
+    const n = peek<SwarmNode[]>(`/e/${e}/nodes`)?.find((x) => x.ID === id)
+    return n ? nodeName(n) : shortId(id)
+  }
+  if (section === 'secrets' || section === 'configs') return peek<{ ID: string; Spec: { Name: string } }[]>(`/e/${e}/${section}`)?.find((x) => x.ID === id)?.Spec.Name ?? shortId(id)
   return id.length > 32 ? shortId(id) : id
 }
 
@@ -78,10 +100,14 @@ function useLiveEvents(ep: string) {
       stream('GET', `/e/${enc(ep)}/events`, undefined, (e) => {
         if (!e.Type || e.Action?.startsWith('exec_') || e.Action?.startsWith('top')) return
         const map: Record<string, string[]> = {
-          container: ['/containers', '/stacks', '/networks', '/volumes', '/info'],
+          container: ['/containers', '/stacks', '/networks', '/volumes', '/info', '/services', '/swarm/stacks'],
           image: ['/images'],
           network: ['/networks'],
           volume: ['/volumes'],
+          service: ['/services', '/swarm'],
+          node: ['/nodes', '/swarm'],
+          secret: ['/secrets'],
+          config: ['/configs'],
         }
         ;(map[e.Type] || []).forEach((k) => pending.add(k))
         if (!timer) timer = setTimeout(flush, 600)
@@ -142,12 +168,18 @@ function EndpointSwitcher({ ep, collapsed }: { ep: string; collapsed: boolean })
 function Sidebar({ ep, section, collapsed, setCollapsed }: { ep: string; section: string; collapsed: boolean; setCollapsed: (v: boolean) => void }) {
   const { data: cts } = useResource<Container[]>(`/e/${enc(ep)}/containers`)
   const { data: stacks } = useResource<Stack[]>(`/e/${enc(ep)}/stacks`)
+  const swarm = useSwarm(ep)
+  const { data: services } = useResource<Service[]>(swarm.manager ? `/e/${enc(ep)}/services` : null)
+  const { data: nodes } = useResource<SwarmNode[]>(swarm.manager ? `/e/${enc(ep)}/nodes` : null)
+  const swarmNav = swarm.manager ? SWARM_NAV : swarm.active ? SWARM_NAV.slice(0, 1) : []
   const [favs, setFavs] = usePref<Fav[]>('favorites', [])
   const [recent, setRecent] = usePref<Recent[]>('recent', [])
   const menu = useMenu()
   const counts: Record<string, string | undefined> = {
     containers: cts ? `${cts.filter((c) => c.State === 'running').length}/${cts.length}` : undefined,
     stacks: stacks ? String(stacks.length) : undefined,
+    services: services ? String(services.length) : undefined,
+    nodes: nodes ? `${nodes.filter((n) => n.Status.State === 'ready').length}/${nodes.length}` : undefined,
   }
   const navMenu = (id: string, label: string) =>
     menu(() => [
@@ -158,6 +190,10 @@ function Sidebar({ ep, section, collapsed, setCollapsed }: { ep: string; section
       id === 'containers' && { label: tr('New container…'), icon: <Plus size={14} />, onClick: () => openDialog((c) => <ContainerFormDialog ep={ep} initial={{}} mode="create" onClose={c} />) },
       id === 'stacks' && 'sep',
       id === 'stacks' && { label: tr('New stack…'), icon: <Plus size={14} />, onClick: () => openDialog((c) => <NewStackDialog ep={ep} onClose={c} />) },
+      id === 'services' && 'sep',
+      id === 'services' && { label: tr('New service…'), icon: <Plus size={14} />, onClick: () => openDialog((c) => <NewServiceDialog ep={ep} onClose={c} />) },
+      id === 'swarm-stacks' && 'sep',
+      id === 'swarm-stacks' && { label: tr('New stack…'), icon: <Plus size={14} />, onClick: () => openDialog((c) => <NewSwarmStackDialog ep={ep} onClose={c} />) },
       id === 'images' && 'sep',
       id === 'images' && { label: tr('Pull image…'), icon: <Download size={14} />, onClick: async () => { const i = await prompt({ title: tr('Pull image'), label: tr('Image'), placeholder: 'nginx:alpine' }); if (i) pullImage(ep, i) } },
       { label: tr('Reload data'), onClick: () => invalidate(`/${id}`) },
@@ -185,6 +221,14 @@ function Sidebar({ ep, section, collapsed, setCollapsed }: { ep: string; section
       const v = peek<Volume[]>(`/e/${e}/volumes`)?.find((x) => x.Name === f.id)
       if (v) return volumeActions(ep, v)
     }
+    if (f.kind === 'service') {
+      const sv = peek<Service[]>(`/e/${e}/services`)?.find((x) => x.ID === f.id)
+      if (sv) return serviceActions(ep, sv)
+    }
+    if (f.kind === 'node') {
+      const n = peek<SwarmNode[]>(`/e/${e}/nodes`)?.find((x) => x.ID === f.id)
+      if (n) return nodeActions(ep, n)
+    }
     return [...base, { label: tr('Remove from favorites'), onClick: () => setFavs(favs.filter((x) => x !== f)) }]
   }
   const favTarget = (f: Fav) => {
@@ -211,6 +255,18 @@ function Sidebar({ ep, section, collapsed, setCollapsed }: { ep: string; section
           </a>
         ))}
       </nav>
+      {swarmNav.length > 0 && (
+        <nav className="nav-section">
+          {!collapsed && <div className="nav-title"><ClusterIcon size={12} /> Swarm</div>}
+          {swarmNav.map((n) => (
+            <a key={n.id} href={href(ep, n.id)} className={`nav-item${section === n.id ? ' active' : ''}`} onContextMenu={navMenu(n.id, n.label)} title={n.label}>
+              <n.icon size={16} />
+              {!collapsed && <span>{n.label}</span>}
+              {!collapsed && counts[n.id] && <span className="nav-count">{counts[n.id]}</span>}
+            </a>
+          ))}
+        </nav>
+      )}
       {!collapsed && myFavs.length > 0 && (
         <div className="nav-section">
           <div className="nav-title"><Star size={12} /> {tr('Favorites')}</div>
@@ -277,13 +333,23 @@ function Palette({ ep, onClose }: { ep: string; onClose: () => void }) {
   const imgs = peek<Image[]>(`/e/${e}/images`) || []
   const nets = peek<Network[]>(`/e/${e}/networks`) || []
   const vols = peek<Volume[]>(`/e/${e}/volumes`) || []
+  const svcs = peek<Service[]>(`/e/${e}/services`) || []
+  const nodes = peek<SwarmNode[]>(`/e/${e}/nodes`) || []
+  const sstacks = peek<SwarmStack[]>(`/e/${e}/swarm/stacks`) || []
+  const swarmManager = !!peek<any>(`/e/${e}/swarm`)?.info?.ControlAvailable
   const eps = peek<Endpoint[]>('/endpoints') || []
   const all: Cmd[] = useMemo(() => [
     { id: 'new-c', label: tr('New container'), icon: <Plus size={15} />, group: tr('Actions'), run: () => openDialog((c) => <ContainerFormDialog ep={ep} initial={{}} mode="create" onClose={c} />) },
     { id: 'new-s', label: tr('New stack (compose)'), icon: <Plus size={15} />, group: tr('Actions'), run: () => openDialog((c) => <NewStackDialog ep={ep} onClose={c} />) },
     { id: 'pull', label: tr('Pull image'), icon: <Download size={15} />, group: tr('Actions'), run: async () => { const x = await prompt({ title: tr('Pull image'), label: tr('Image'), placeholder: 'nginx:alpine' }); if (x) pullImage(ep, x) } },
     { id: 'market', label: tr('Deploy an app from the marketplace'), icon: <Rocket size={15} />, group: tr('Actions'), run: () => go(ep, 'marketplace') },
-    ...[...NAV, ...NAV2].map((n) => ({ id: 'nav-' + n.id, label: tr('Go to {0}', n.label), icon: <n.icon size={15} />, group: tr('Navigation'), run: () => go(ep, n.id) })),
+    ...(swarmManager
+      ? [
+          { id: 'new-svc', label: tr('New swarm service'), icon: <Plus size={15} />, group: tr('Actions'), run: () => openDialog((c) => <NewServiceDialog ep={ep} onClose={c} />) },
+          { id: 'new-sst', label: tr('New swarm stack'), icon: <Plus size={15} />, group: tr('Actions'), run: () => openDialog((c) => <NewSwarmStackDialog ep={ep} onClose={c} />) },
+        ]
+      : [{ id: 'swarm', label: tr('Swarm mode (initialize or join)'), icon: <ClusterIcon size={15} />, group: tr('Actions'), run: () => go(ep, 'swarm') }]),
+    ...[...NAV, ...SWARM_NAV, ...NAV2].map((n) => ({ id: 'nav-' + n.id, label: tr('Go to {0}', n.label), icon: <n.icon size={15} />, group: tr('Navigation'), run: () => go(ep, n.id) })),
     ...eps.filter((x) => x.name !== ep).map((x) => ({ id: 'ep-' + x.name, label: tr('Switch to host {0}', x.name), sub: x.url, icon: <Server size={15} />, group: tr('Hosts'), run: () => go(x.name, 'jump') })),
     ...cts.map((c) => ({ id: c.Id, label: cname(c), sub: `${c.State} · ${c.Image}${stackOf(c) ? ' · ' + stackOf(c) : ''}`, icon: <Box size={15} />, group: tr('Containers'), run: () => go(ep, 'containers', c.Id), menu: () => containerActions(ep, c) })),
     ...cts.filter((c) => c.State === 'running').map((c) => ({ id: 'sh-' + c.Id, label: tr('Terminal in {0}', cname(c)), icon: <Box size={15} />, group: tr('Terminal'), run: () => go(ep, 'containers', c.Id, 'terminal') })),
@@ -291,6 +357,10 @@ function Palette({ ep, onClose }: { ep: string; onClose: () => void }) {
     ...stacks.map((s) => ({ id: 's-' + s.name, label: s.name, sub: `${s.running}/${s.total} · ${s.status}`, icon: <Layers size={15} />, group: 'Stacks', run: () => go(ep, 'stacks', s.name), menu: () => stackActions(ep, s) })),
     ...imgs.flatMap((im) => (im.RepoTags || []).filter((t) => !t.startsWith('<none>')).map((t) => ({ id: 'i-' + t, label: t, icon: <ImageIcon size={15} />, group: tr('Images'), run: () => go(ep, 'images', im.Id), menu: () => imageActions(ep, im) }))),
     ...nets.map((n) => ({ id: 'n-' + n.Id, label: n.Name, sub: n.Driver, icon: <NetIcon size={15} />, group: tr('Networks'), run: () => go(ep, 'networks', n.Id), menu: () => networkActions(ep, n) })),
+    ...svcs.map((sv) => ({ id: 'sv-' + sv.ID, label: sv.Spec.Name, sub: `${sv.ServiceStatus?.RunningTasks ?? '?'}/${sv.ServiceStatus?.DesiredTasks ?? '?'} · ${serviceImage(sv)}`, icon: <Boxes size={15} />, group: tr('Services'), run: () => go(ep, 'services', sv.ID), menu: () => serviceActions(ep, sv) })),
+    ...svcs.map((sv) => ({ id: 'svl-' + sv.ID, label: tr('Logs of {0}', sv.Spec.Name), icon: <Boxes size={15} />, group: tr('Logs'), run: () => go(ep, 'services', sv.ID, 'logs') })),
+    ...sstacks.map((st) => ({ id: 'ss-' + st.name, label: st.name, sub: `swarm · ${st.running}/${st.desired}`, icon: <Layers size={15} />, group: 'Stacks', run: () => go(ep, 'swarm-stacks', st.name), menu: () => swarmStackActions(ep, st) })),
+    ...nodes.map((n) => ({ id: 'nd-' + n.ID, label: nodeName(n), sub: `${n.Spec.Role} · ${n.Status.State} · ${n.Spec.Availability}`, icon: <Server size={15} />, group: tr('Nodes'), run: () => go(ep, 'nodes', n.ID), menu: () => nodeActions(ep, n) })),
     ...vols.map((v) => ({ id: 'v-' + v.Name, label: v.Name, icon: <HardDrive size={15} />, group: tr('Volumes'), run: () => go(ep, 'volumes', v.Name), menu: () => volumeActions(ep, v) })),
   ], [ep])
   const results = useMemo(() => {
@@ -400,6 +470,7 @@ function UserMenu() {
 function Topbar({ ep, onSearch }: { ep: string; onSearch: () => void }) {
   const [theme, setTheme] = usePref<'auto' | 'light' | 'dark'>('theme', 'auto')
   const menu = useMenu()
+  const swarm = useSwarm(ep)
   useEffect(() => {
     if (theme === 'auto') document.documentElement.removeAttribute('data-theme')
     else document.documentElement.setAttribute('data-theme', theme)
@@ -408,6 +479,10 @@ function Topbar({ ep, onSearch }: { ep: string; onSearch: () => void }) {
     { label: tr('Container'), icon: <Box size={14} />, onClick: () => openDialog((c) => <ContainerFormDialog ep={ep} initial={{}} mode="create" onClose={c} />) },
     { label: 'Stack (compose)', icon: <Layers size={14} />, onClick: () => openDialog((c) => <NewStackDialog ep={ep} onClose={c} />) },
     { label: tr('From the marketplace'), icon: <Store size={14} />, onClick: () => go(ep, 'marketplace') },
+    swarm.manager && 'sep',
+    swarm.manager && { label: tr('Swarm service'), icon: <Boxes size={14} />, onClick: () => openDialog((c) => <NewServiceDialog ep={ep} onClose={c} />) },
+    swarm.manager && { label: tr('Swarm stack'), icon: <Layers size={14} />, onClick: () => openDialog((c) => <NewSwarmStackDialog ep={ep} onClose={c} />) },
+    swarm.manager && { label: 'Secret / config', icon: <KeyRound size={14} />, onClick: () => go(ep, 'secrets') },
     'sep',
     { label: tr('Pull image'), icon: <Download size={14} />, onClick: async () => { const x = await prompt({ title: tr('Pull image'), label: tr('Image'), placeholder: 'nginx:alpine' }); if (x) pullImage(ep, x) } },
     { label: tr('Network'), icon: <NetIcon size={14} />, onClick: () => go(ep, 'networks') },
@@ -472,7 +547,7 @@ function Shell() {
   }, [])
 
   useEffect(() => {
-    if (!route.id || !['containers', 'stacks', 'images', 'networks', 'volumes'].includes(route.section)) return
+    if (!route.id || !RECORD_SECTIONS.includes(route.section)) return
     const t = setTimeout(() => {
       const label = labelFor(ep, route.section, route.id!)
       setRecent((list) => [{ ep, section: route.section, id: route.id!, label }, ...list.filter((r) => !(r.ep === ep && r.section === route.section && r.id === route.id))].slice(0, 20))
@@ -500,6 +575,22 @@ function Shell() {
       break
     case 'volumes':
       page = id ? <VolumeRecord ep={ep} name={id} /> : <Volumes ep={ep} />
+      break
+    case 'swarm':
+      page = <SwarmOverview ep={ep} />
+      break
+    case 'services':
+      page = id ? <ServiceRecord ep={ep} id={id} tab={tab} /> : <Services ep={ep} />
+      break
+    case 'nodes':
+      page = id ? <NodeRecord ep={ep} id={id} /> : <Nodes ep={ep} />
+      break
+    case 'secrets':
+    case 'configs':
+      page = id ? <SwarmObjectRecord ep={ep} kind={section} id={id} /> : <SwarmObjects ep={ep} kind={section} />
+      break
+    case 'swarm-stacks':
+      page = id ? <SwarmStackRecord ep={ep} name={id} tab={tab} /> : <SwarmStacks ep={ep} />
       break
     case 'marketplace':
       page = <Marketplace ep={ep} />
@@ -533,7 +624,7 @@ function Shell() {
           { label: tr('New container…'), icon: <Box size={14} />, onClick: () => openDialog((c) => <ContainerFormDialog ep={ep} initial={{}} mode="create" onClose={c} />) },
           { label: tr('New stack…'), icon: <Layers size={14} />, onClick: () => openDialog((c) => <NewStackDialog ep={ep} onClose={c} />) },
           'sep',
-          { label: tr('Go to'), submenu: [...NAV, ...NAV2].map((n) => ({ label: n.label, icon: <n.icon size={14} />, onClick: () => go(ep, n.id) })) },
+          { label: tr('Go to'), submenu: [...NAV, ...SWARM_NAV, ...NAV2].map((n) => ({ label: n.label, icon: <n.icon size={14} />, onClick: () => go(ep, n.id) })) },
           { label: tr('Back'), onClick: () => history.back() },
         ])(e)
       }}

@@ -836,3 +836,8 @@ mark { background: #fde68a; color: #111; border-radius: 2px; }
 .expose-form input[type='radio'] { width: auto; }
 @media (max-width: 640px) { .tunnel-modes { grid-template-columns: 1fr; } }
 .tunnels-tab .seg button { display: inline-flex; align-items: center; gap: 6px; height: 30px; }
+
+/* ---------- swarm ---------- */
+.stack-gap { display: flex; flex-direction: column; gap: 10px; }
+.swarm-setup { display: flex; flex-direction: column; gap: 12px; max-width: 780px; }
+.text-bad { color: var(--bad); }

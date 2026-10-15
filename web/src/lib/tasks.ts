@@ -2,7 +2,7 @@ import { t as tr } from '../i18n'
 // Human titles for API requests shown in the tasks tray.
 import { peek } from './store'
 import { cname, shortId } from './format'
-import type { Container } from './types'
+import type { Container, Service, SwarmNode } from './types'
 
 const kinds: Record<string, string> = { images: 'images', networks: 'networks', volumes: 'volumes', containers: 'containers', stacks: 'stacks' }
 
@@ -25,6 +25,22 @@ const stackVerbs: Record<string, string> = {
   restart: 'Restart',
   pause: 'Pause',
   unpause: 'Resume',
+}
+
+const serviceVerbs: Record<string, string> = {
+  scale: 'Scale',
+  restart: 'Restart',
+  rollback: 'Roll back',
+  image: 'Update image of',
+}
+
+function serviceName(ep: string, id: string) {
+  return peek<Service[]>(`/e/${encodeURIComponent(ep)}/services`)?.find((x) => x.ID === id || x.Spec.Name === id)?.Spec.Name ?? shortId(id)
+}
+
+function nodeLabel(ep: string, id: string) {
+  const n = peek<SwarmNode[]>(`/e/${encodeURIComponent(ep)}/nodes`)?.find((x) => x.ID === id)
+  return n ? n.Spec.Name || n.Description.Hostname : shortId(id)
 }
 
 function containerName(ep: string, id: string) {
@@ -74,6 +90,26 @@ export function taskTitle(method: string, path: string): string {
         break
       case 'tunnels':
         return tr('Open tunnel')
+      case 'services': {
+        if (!id) return tr('Create service')
+        const n = serviceName(ep, id)
+        if (del) return tr('Delete service {0}', n)
+        if (sub === 'action' && arg) return `${tr(serviceVerbs[arg] || arg)} ${n}`
+        return tr('Update {0}', n)
+      }
+      case 'nodes':
+        if (del) return tr('Remove node {0}', nodeLabel(ep, id))
+        return tr('Update {0}', nodeLabel(ep, id))
+      case 'secrets':
+      case 'configs':
+        return del ? tr('Delete {0}', kind.slice(0, -1)) : `${tr('Create')} ${kind.slice(0, -1)}`
+      case 'swarm':
+        if (id === 'init') return tr('Initialize swarm')
+        if (id === 'join') return tr('Join swarm')
+        if (id === 'leave') return tr('Leave swarm')
+        if (id === 'tokens') return tr('Rotate token')
+        if (id === 'stacks' && arg === 'deploy') return `${tr('Deploy')} ${sub}`
+        break
     }
     return `${method} ${segs.slice(2).join('/')}`
   }

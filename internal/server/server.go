@@ -30,9 +30,11 @@ type Server struct {
 	Access  *access.List
 	Catalog *templates.Catalog
 	Stacks  *compose.Store
-	UI      fs.FS
-	Secure  bool // served over TLS: mark cookies Secure
-	Version string
+	// SwarmStacks keeps the compose files of stacks deployed to Swarm.
+	SwarmStacks *compose.Store
+	UI          fs.FS
+	Secure      bool // served over TLS: mark cookies Secure
+	Version     string
 	// Listen / Expose / AgentListen are the addresses serve was started with
 	Listen      string
 	Expose      string
@@ -54,14 +56,15 @@ type Server struct {
 
 func New(cfg *config.Config, acl *access.List, ui fs.FS) *Server {
 	return &Server{
-		Cfg:     cfg,
-		Access:  acl,
-		Catalog: templates.NewCatalog(cfg),
-		Stacks:  &compose.Store{Root: config.Dir()},
-		UI:      ui,
-		clients: map[string]*docker.Client{},
-		limiter: auth.NewLimiter(5, 10*time.Minute),
-		audit:   newAuditLog(filepath.Join(config.Dir(), "audit.log")),
+		Cfg:         cfg,
+		Access:      acl,
+		Catalog:     templates.NewCatalog(cfg),
+		Stacks:      &compose.Store{Root: config.Dir()},
+		SwarmStacks: &compose.Store{Root: filepath.Join(config.Dir(), "swarm")},
+		UI:          ui,
+		clients:     map[string]*docker.Client{},
+		limiter:     auth.NewLimiter(5, 10*time.Minute),
+		audit:       newAuditLog(filepath.Join(config.Dir(), "audit.log")),
 	}
 }
 

@@ -75,13 +75,26 @@ export function uniquePorts(c: Container) {
 export function stateTone(state: string): 'ok' | 'warn' | 'bad' | 'idle' {
   switch (state) {
     case 'running':
+    case 'ready':
+    case 'active':
       return 'ok'
+    case 'pending':
+    case 'assigned':
+    case 'accepted':
+    case 'preparing':
+    case 'starting':
+    case 'pause':
+    case 'drain':
     case 'paused':
     case 'restarting':
     case 'partial':
     case 'created':
       return 'warn'
     case 'dead':
+    case 'failed':
+    case 'rejected':
+    case 'down':
+    case 'disconnected':
       return 'bad'
     default:
       return 'idle'
@@ -99,6 +112,19 @@ export const stateLabel: Record<string, string> = {
   partial: t('Partial'),
   stopped: t('Stopped'),
   empty: t('No containers'),
+  ready: t('Ready'),
+  down: t('Down'),
+  disconnected: t('Disconnected'),
+  active: t('Active'),
+  pause: t('Paused'),
+  drain: t('Drained'),
+  failed: t('Failed'),
+  rejected: t('Rejected'),
+  complete: t('Completed'),
+  shutdown: t('Shut down'),
+  pending: t('Pending'),
+  preparing: t('Preparing'),
+  starting: t('Starting'),
 }
 
 /** Exit code from a Status string like "Exited (137) 2 hours ago". */

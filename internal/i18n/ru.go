@@ -324,4 +324,16 @@ var ru = map[string]string{
 	"warning: could not create the logon task that keeps %s running (%v); containers stop when WSL shuts the distribution down\n": "предупреждение: не удалось создать задачу входа, которая держит %s запущенным (%v); контейнеры остановятся, когда WSL выключит дистрибутив\n",
 	"wsl (Linux containers):      %s\n": "wsl (Linux-контейнеры):      %s\n",
 	"wsl: Linux containers in a WSL 2 distribution · native: Windows containers with dockerd.exe": "wsl: Linux-контейнеры в дистрибутиве WSL 2 · native: Windows-контейнеры с dockerd.exe",
+	// swarm
+	"a name is required": "требуется имя",
+	"ducktainer has no compose file for %s: paste it in the Compose tab to manage it from here": "у ducktainer нет compose-файла для %s: вставьте его на вкладке Compose, чтобы управлять отсюда",
+	"invalid base64: %v":                                             "неверный base64: %v",
+	"only replicated services can be scaled":                         "масштабировать можно только реплицируемые сервисы",
+	"the `docker` CLI is required on the machine running ducktainer": "на машине с ducktainer нужен CLI `docker`",
+	"the manager address and the join token are required":            "нужны адрес менеджера и токен присоединения",
+	"the service has no previous version to roll back to":            "у сервиса нет предыдущей версии для отката",
+	"the service needs an image":                                     "сервису нужен образ",
+	"unknown availability %q":                                        "неизвестная доступность %q",
+	"unknown role %q":                                                "неизвестная роль %q",
+	"unknown token":                                                  "неизвестный токен",
 }

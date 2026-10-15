@@ -238,3 +238,133 @@ export interface LogLine {
   m: string
   c?: string
 }
+
+// ---------- swarm ----------
+
+export interface SwarmInfo {
+  info: {
+    NodeID: string
+    NodeAddr: string
+    LocalNodeState: 'inactive' | 'pending' | 'active' | 'error' | 'locked'
+    ControlAvailable: boolean
+    Error: string
+    RemoteManagers: { NodeID: string; Addr: string }[] | null
+    Nodes: number
+    Managers: number
+  }
+  cluster?: {
+    ID: string
+    CreatedAt: string
+    UpdatedAt: string
+    DefaultAddrPool: string[]
+    SubnetSize: number
+    DataPathPort: number
+    Spec: { Name: string; Orchestration?: { TaskHistoryRetentionLimit?: number }; EncryptionConfig?: { AutoLockManagers: boolean } }
+  }
+}
+
+export interface SwarmNode {
+  ID: string
+  CreatedAt: string
+  UpdatedAt: string
+  Spec: { Name?: string; Role: 'worker' | 'manager'; Availability: 'active' | 'pause' | 'drain'; Labels?: Record<string, string> }
+  Description: {
+    Hostname: string
+    Platform: { Architecture: string; OS: string }
+    Resources: { NanoCPUs: number; MemoryBytes: number }
+    Engine: { EngineVersion: string; Labels?: Record<string, string> }
+  }
+  Status: { State: 'unknown' | 'down' | 'ready' | 'disconnected'; Addr: string; Message?: string }
+  ManagerStatus?: { Leader?: boolean; Reachability: string; Addr: string }
+  RunningTasks: number
+}
+
+export interface PortConfig {
+  Name?: string
+  Protocol: 'tcp' | 'udp' | 'sctp'
+  TargetPort: number
+  PublishedPort?: number
+  PublishMode?: 'ingress' | 'host'
+}
+
+export interface ServiceSpec {
+  Name: string
+  Labels?: Record<string, string>
+  TaskTemplate: {
+    ContainerSpec: {
+      Image: string
+      Command?: string[]
+      Args?: string[]
+      Env?: string[]
+      Labels?: Record<string, string>
+      Mounts?: { Type: string; Source?: string; Target: string; ReadOnly?: boolean }[]
+      Secrets?: { SecretID: string; SecretName: string; File?: { Name: string; UID: string; GID: string; Mode: number } }[]
+      Configs?: { ConfigID: string; ConfigName: string; File?: { Name: string; UID: string; GID: string; Mode: number } }[]
+      TTY?: boolean
+    }
+    Placement?: { Constraints?: string[] }
+    RestartPolicy?: { Condition?: 'none' | 'on-failure' | 'any'; MaxAttempts?: number }
+    Resources?: { Limits?: { NanoCPUs?: number; MemoryBytes?: number } }
+    Networks?: { Target: string; Aliases?: string[] }[]
+    ForceUpdate?: number
+  }
+  Mode: { Replicated?: { Replicas: number }; Global?: {}; ReplicatedJob?: {}; GlobalJob?: {} }
+  EndpointSpec?: { Mode?: 'vip' | 'dnsrr'; Ports?: PortConfig[] }
+  UpdateConfig?: any
+  RollbackConfig?: any
+}
+
+export interface Service {
+  ID: string
+  CreatedAt: string
+  UpdatedAt: string
+  Spec: ServiceSpec
+  PreviousSpec?: ServiceSpec
+  Endpoint?: { Ports?: PortConfig[]; VirtualIPs?: { NetworkID: string; Addr: string }[] }
+  UpdateStatus?: { State: string; Message?: string; StartedAt?: string; CompletedAt?: string }
+  ServiceStatus?: { RunningTasks: number; DesiredTasks: number; CompletedTasks: number }
+}
+
+export interface Task {
+  id: string
+  service_id: string
+  service: string
+  node_id: string
+  node: string
+  slot: number
+  image: string
+  state: string
+  desired_state: string
+  message: string
+  error?: string
+  container_id?: string
+  exit_code: number
+  updated: string
+  created: string
+}
+
+export interface SwarmObject {
+  ID: string
+  CreatedAt: string
+  UpdatedAt: string
+  Spec: { Name: string; Labels?: Record<string, string>; Data?: string }
+  UsedBy: { id: string; name: string }[]
+}
+
+export interface SwarmStackService {
+  id: string
+  name: string
+  image: string
+  mode: string
+  running: number
+  desired: number
+}
+
+export interface SwarmStack {
+  name: string
+  managed: boolean
+  services: SwarmStackService[]
+  running: number
+  desired: number
+  status: 'running' | 'partial' | 'stopped' | 'empty'
+}

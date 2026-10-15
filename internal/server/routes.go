@@ -108,6 +108,40 @@ func (s *Server) routes(mux *http.ServeMux) {
 	e("GET /stacks/{name}/merged", s.stackMerged)
 	e("POST /stacks/{name}/merge", s.stackMerge)
 	e("PUT /stacks/{name}/location", s.stackLocation)
+
+	e("GET /swarm", s.swarmInfo)
+	e("GET /swarm/tokens", s.swarmTokens)
+	e("POST /swarm/init", s.swarmInit)
+	e("POST /swarm/join", s.swarmJoin)
+	e("POST /swarm/leave", s.swarmLeave)
+	e("POST /swarm/tokens/{which}/rotate", s.swarmRotate)
+	e("GET /swarm/stacks", s.listSwarmStacks)
+	e("POST /swarm/stacks", s.createSwarmStack)
+	e("GET /swarm/stacks/{name}", s.getSwarmStack)
+	e("PUT /swarm/stacks/{name}", s.updateSwarmStack)
+	e("DELETE /swarm/stacks/{name}", s.removeSwarmStack)
+	e("POST /swarm/stacks/{name}/deploy", s.deploySwarmStack)
+	e("GET /swarm/stacks/{name}/logs", s.swarmStackLogs)
+
+	e("GET /nodes", s.listNodes)
+	e("GET /nodes/{id}", s.inspectNode)
+	e("POST /nodes/{id}/update", s.updateNode)
+	e("DELETE /nodes/{id}", s.removeNode)
+
+	e("GET /services", s.listServices)
+	e("POST /services", s.createService)
+	e("GET /services/{id}", s.inspectService)
+	e("PUT /services/{id}", s.updateService)
+	e("DELETE /services/{id}", s.removeService)
+	e("POST /services/{id}/action/{action}", s.serviceAction)
+	e("GET /services/{id}/logs", s.serviceLogs)
+
+	for _, k := range []swarmObject{"secrets", "configs"} {
+		e("GET /"+string(k), k.list(s))
+		e("POST /"+string(k), k.create(s))
+		e("GET /"+string(k)+"/{id}", k.inspect(s))
+		e("DELETE /"+string(k)+"/{id}", k.remove(s))
+	}
 }
 
 func cut(pattern string) (method, path string, ok bool) {

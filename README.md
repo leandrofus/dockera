@@ -172,6 +172,13 @@ ducktainer controls the Docker API of every host, which is equivalent to root on
   - validation before saving (`docker compose config`), deploy and update, combined logs per service;
   - stacks created outside ducktainer are detected and edited in place, or adopted into ducktainer;
   - a stack can live in ducktainer's store or in a directory of your choice, also on remote nodes.
+- **Swarm mode**: when a host is part of a swarm, a Swarm group appears in the sidebar:
+  - **Cluster**: initialize a swarm or join one, join commands for workers and managers (with token rotation), leave the swarm;
+  - **Services**: create (image, replicas or global, ports, environment, overlay networks, secrets, configs, constraints, limits), scale, restart, update the image, roll back, edit the full spec, tasks per node and live logs;
+  - **Swarm stacks** deployed with `docker stack deploy` from a compose file and `.env` (same editors as compose stacks); stacks deployed elsewhere are listed and can be adopted by pasting their compose. Swarm templates from the marketplace deploy here;
+  - **Nodes**: availability (active, pause, drain), promote/demote, labels, tasks per node, remove;
+  - **Secrets and configs**: create from text or a file, see which services use them.
+  Workers only show the cluster page: the swarm is managed from a manager host.
 - **Images**: pull and push with per-layer progress, tag, build from a Dockerfile, layer history, cleanup.
 - **Networks**: a registry with connected containers and their IPs, a connection map, create, connect and disconnect.
 - **Volumes**: who uses each one, orphans, sizes, and browsing their contents through a running container that mounts them.

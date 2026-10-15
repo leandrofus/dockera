@@ -157,7 +157,7 @@ func (s *Server) session(r *http.Request) (*Session, error) {
 
 // Viewers can look but not touch: no mutations, no shells, no file
 // downloads and no settings (which hold credentials).
-var viewerDenied = regexp.MustCompile(`/(exec|files|download)$|^/api/(settings|registries|audit)`)
+var viewerDenied = regexp.MustCompile(`/(exec|files|download)$|/swarm/tokens$|^/api/(settings|registries|audit)`)
 
 func viewerAllowed(r *http.Request) bool {
 	if r.Method != http.MethodGet && r.Method != http.MethodHead {

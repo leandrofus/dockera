@@ -372,6 +372,51 @@ func (r *Runner) Command(ctx context.Context, project, dir string, files []strin
 	return cmd, cleanup, nil
 }
 
+// Stack runs `docker stack args...` (Swarm) on this machine against the
+// endpoint. vars (KEY=value) are added to the environment, which is what
+// `docker stack deploy` interpolates the compose file with.
+func (r *Runner) Stack(ctx context.Context, stdout, stderr io.Writer, dir string, vars []string, args ...string) error {
+	if _, err := exec.LookPath("docker"); err != nil {
+		return i18n.Errorf("the `docker` CLI is required on the machine running ducktainer")
+	}
+	cmd := exec.CommandContext(ctx, "docker", append([]string{"stack"}, args...)...)
+	cmd.Dir = dir
+	env, cleanup, err := r.env()
+	if err != nil {
+		return err
+	}
+	defer cleanup()
+	cmd.Env = append(env, vars...) // later entries win over the server's own
+	cmd.Stdout, cmd.Stderr = stdout, stderr
+	fmt.Fprintf(stderr, "$ docker %s\n", strings.Join(cmd.Args[1:], " "))
+	return cmd.Run()
+}
+
+// ParseEnv reads a .env file into KEY=value entries (comments, blank lines
+// and an `export ` prefix are skipped; surrounding quotes are removed).
+func ParseEnv(text string) []string {
+	var out []string
+	for line := range strings.SplitSeq(text, "\n") {
+		line = strings.TrimSpace(strings.TrimPrefix(strings.TrimSpace(line), "export "))
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		k, v, ok := strings.Cut(line, "=")
+		k = strings.TrimSpace(k)
+		if !ok || k == "" {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if len(v) >= 2 && (v[0] == '"' || v[0] == '\'') && v[len(v)-1] == v[0] {
+			v = v[1 : len(v)-1]
+		} else if i := strings.Index(v, " #"); i >= 0 {
+			v = strings.TrimSpace(v[:i])
+		}
+		out = append(out, k+"="+v)
+	}
+	return out
+}
+
 func (r *Runner) env() ([]string, func(), error) {
 	env := os.Environ()
 	filtered := env[:0]

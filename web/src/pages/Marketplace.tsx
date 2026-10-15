@@ -12,6 +12,7 @@ import { useMenu } from '../ui/ContextMenu'
 import { Modal, openDialog, runJob, toast } from '../ui/overlays'
 import { ContainerFormDialog, emptySpec, splitArgs } from '../components/ContainerForm'
 import { PlacementFields, placementBody, usePlacement } from './Stacks'
+import { useSwarm } from './Swarm'
 
 // Template notes are HTML from remote sources: keep a tiny safe subset.
 function safeHTML(html: string) {
@@ -103,6 +104,10 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
   const [busy, setBusy] = useState(false)
   const [showCompose, setShowCompose] = useState(false)
   const [place, setPlace, remote] = usePlacement(ep)
+  const { manager } = useSwarm(ep)
+  const [target, setTarget] = useState<'swarm' | 'compose' | null>(null)
+  // swarm templates go to the swarm when this host manages one
+  const toSwarm = t.type !== 1 && manager && (target ?? (t.type === 2 ? 'swarm' : 'compose')) === 'swarm'
 
   useEffect(() => {
     if (t.type === 1) return
@@ -121,6 +126,13 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
         if (res?.id) go(ep, 'containers', res.id)
       } else {
         const envText = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n')
+        if (toSwarm) {
+          await runJob(tr('Deploy {0}', t.title), 'POST', `/e/${enc(ep)}/swarm/stacks`, { name, compose, env: envText, deploy: true })
+          onClose()
+          invalidate('/swarm', '/services')
+          go(ep, 'swarm-stacks', name)
+          return
+        }
         await runJob(tr('Deploy {0}', t.title), 'POST', `/e/${enc(ep)}/stacks`, { name, compose, env: envText, deploy: true, pull: true, ...placementBody({ ...place, existing: false }, name) })
         onClose()
         invalidate('/stacks', '/containers')
@@ -158,7 +170,16 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
     >
       <p className="muted">{tr(t.description)}</p>
       {t.note && <div className="alert" dangerouslySetInnerHTML={{ __html: safeHTML(tr(t.note)) }} />}
-      {t.type === 2 && <div className="alert alert-warn">{tr('Template meant for Docker Swarm: it will be deployed with docker compose and may need adjustments.')}</div>}
+      {t.type !== 1 && manager && (
+        <div className="field">
+          <span>{tr('Deploy as')}</span>
+          <div className="seg seg-text">
+            <button className={toSwarm ? 'on' : ''} onClick={() => setTarget('swarm')}>{tr('Swarm stack (docker stack deploy)')}</button>
+            <button className={!toSwarm ? 'on' : ''} onClick={() => setTarget('compose')}>{tr('Compose on this host')}</button>
+          </div>
+        </div>
+      )}
+      {t.type === 2 && !toSwarm && <div className="alert alert-warn">{tr('Template meant for Docker Swarm: it will be deployed with docker compose and may need adjustments.')}</div>}
       <div className="row gap wrap">
         <Tag tone="accent">{tr(kindLabel[t.type])}</Tag>
         {t.image && <Tag mono>{t.image}</Tag>}
@@ -168,7 +189,7 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
         <span>{t.type === 1 ? tr('Container name') : tr('Stack name')}</span>
         <input value={name} onChange={(e) => setName(t.type === 1 ? e.target.value : slug(e.target.value))} />
       </label>
-      {t.type !== 1 && (
+      {t.type !== 1 && !toSwarm && (
         <div className="field">
           <span>{tr('Location')}</span>
           <PlacementFields name={name} value={place} onChange={setPlace} remote={remote} />
@@ -231,7 +252,7 @@ export function Marketplace({ ep }: { ep: string }) {
         <aside className="filters">
           <div className="filter-group">
             <div className="filter-title">{tr('Type')}</div>
-            {[[0, tr('All')], [1, tr('Containers')], [3, tr('Compose stacks')]].map(([k, l]) => (
+            {[[0, tr('All')], [1, tr('Containers')], [3, tr('Compose stacks')], [2, tr('Swarm stacks')]].map(([k, l]) => (
               <button key={k} className={`filter${kind === k ? ' on' : ''}`} onClick={() => setKind(k as number)}>{l}</button>
             ))}
           </div>
