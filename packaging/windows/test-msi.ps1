@@ -50,16 +50,13 @@ function Login($user, $pass) {
   return [pscustomobject]@{ Status = [int]$r.StatusCode; Body = $body; Session = $s }
 }
 
-function Net([string[]]$a) {
-  & net.exe @a | Out-Null
-  if ($LASTEXITCODE) { throw "net $($a -join ' '): exit $LASTEXITCODE" }
-}
-
 function User($name, $group) {
-  if (-not (Get-LocalUser $name -ErrorAction SilentlyContinue)) { Net 'user', $name, $pw, '/add' }
+  if (-not (Get-LocalUser $name -ErrorAction SilentlyContinue)) {
+    New-LocalUser $name -Password (ConvertTo-SecureString $pw -AsPlainText -Force) -PasswordNeverExpires | Out-Null
+  }
   if ($group) {
-    if (-not (Get-LocalGroup $group -ErrorAction SilentlyContinue)) { Net 'localgroup', $group, '/add' }
-    if (-not (Get-LocalGroupMember $group -Member $name -ErrorAction SilentlyContinue)) { Net 'localgroup', $group, $name, '/add' }
+    if (-not (Get-LocalGroup $group -ErrorAction SilentlyContinue)) { New-LocalGroup $group | Out-Null }
+    if (-not (Get-LocalGroupMember $group -Member $name -ErrorAction SilentlyContinue)) { Add-LocalGroupMember $group -Member $name }
   }
 }
 
