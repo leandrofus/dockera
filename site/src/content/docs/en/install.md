@@ -28,9 +28,26 @@ The package:
 - runs `ducktainer setup` to detect how Docker is installed;
 - enables the `ducktainer` service, listening on `http://127.0.0.1:9900`.
 
+## Windows (MSI)
+
+From an administrator PowerShell:
+
+```powershell
+curl.exe -fLO https://github.com/leandrofus/ducktainer/releases/latest/download/ducktainer-latest-x64.msi
+Start-Process msiexec -Wait -ArgumentList '/i ducktainer-latest-x64.msi'
+```
+
+The installer:
+
+- puts `ducktainer.exe` in `C:\Program Files\ducktainer` and on the PATH;
+- registers the `ducktainer` service (`ducktainer serve` as LocalSystem, restarted if it fails), listening on `http://127.0.0.1:9900`, and a Start menu entry;
+- keeps the data in `C:\ProgramData\ducktainer`, which only SYSTEM and the Administrators can read. From an administrator terminal, `ducktainer token`, `ducktainer allow` or `ducktainer auth` work on the service's configuration.
+
+People sign in with their Windows accounts (local, or `DOMAIN\user`). Members of Administrators, `docker-users` or `ducktainer-admins` are administrators; members of `ducktainer-viewers` get read-only access. Roles come from local groups, so a domain group counts once it is a member of one of them. Upgrades keep the configuration, and uninstalling leaves `C:\ProgramData\ducktainer` in place. If the machine has no Docker yet, install it with `ducktainer engine install` (below).
+
 ## Single binary
 
-The binary runs on any Linux, macOS or Windows. Without the package there is no PAM, so you sign in with the token it prints at startup.
+The binary runs on any Linux, macOS or Windows. Without the package there is no PAM, so on Linux and macOS you sign in with the token it prints at startup. On Windows the binary also signs in Windows accounts.
 
 ```sh
 ./ducktainer serve            # http://127.0.0.1:9900, prints the access token
@@ -48,7 +65,7 @@ The binary runs on any Linux, macOS or Windows. Without the package there is no 
 .\ducktainer.exe ui
 ```
 
-- **`wsl`** (the default) creates the `ducktainer` WSL 2 distribution from Ubuntu's image, checked against Ubuntu's SHA256SUMS. It runs `docker.io` there with systemd and adds the `wsl` host (`wsl://ducktainer`). A logon task keeps the distribution running, so containers don't stop when WSL would shut it down. WSL distributions belong to a user: run ducktainer as that user.
+- **`wsl`** (the default) creates the `ducktainer` WSL 2 distribution from Ubuntu's image, checked against Ubuntu's SHA256SUMS. It runs `docker.io` there with systemd and adds the `wsl` host (`wsl://ducktainer`). At logon, a task starts `ducktainer engine relay` for the user who ran the install. The relay keeps the distribution running, so containers don't stop when WSL would shut it down. It also serves the distribution's Docker on a named pipe, because WSL distributions belong to a user and the service (LocalSystem) can't start them. The service adds the `wsl` host when it finds an administrator's relay, and those containers run while that user is signed in.
 - **`native`** enables the Containers feature (and Hyper-V on Windows 10/11), installs `dockerd.exe`, `docker.exe` and the compose plugin in `C:\Program Files\Docker`, and registers the `docker` service. The `local` host then points at `npipe:////./pipe/docker_engine`. Windows Home has no Containers feature: use `wsl`.
 - If Windows needs a restart to enable WSL or a feature, restart and run the same command again.
 

@@ -10,7 +10,7 @@ order: 6
 | `ducktainer ui` | То же, что `serve`, и дополнительно открывает браузер |
 | `ducktainer agent` | Агент с исходящим подключением (`--server`, `--name`, `--fingerprint`, `--socket`, `--install-service`; токен в `DUCKTAINER_AGENT_TOKEN`) |
 | `ducktainer expose` | Публикует только Docker API, защищённый списком разрешённых, токеном и TLS (`--read-only`, `--no-exec`) |
-| `ducktainer engine install [--mode wsl\|native] \| status` | Windows: установка Docker без Docker Desktop |
+| `ducktainer engine install [--mode wsl\|native] \| status \| relay` | Windows: установка Docker без Docker Desktop |
 | `ducktainer setup [--dry-run]` | Настраивает службу под установку Docker |
 | `ducktainer auth show \| set … \| test <user>` | Вход под системным пользователем и сопоставление ролей |
 | `ducktainer allow ls \| add \| rm` | Список разрешённых сетевых адресов |

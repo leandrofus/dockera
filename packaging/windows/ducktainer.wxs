@@ -1,0 +1,57 @@
+<!--
+  ducktainer for Windows (WiX Toolset v5):
+
+    wix build packaging/windows/ducktainer.wxs -arch x64 -d Version=1.5.0 -d Exe=dist/ducktainer.exe -o ducktainer.msi
+
+  Installs ducktainer.exe in Program Files (and on the PATH) and runs it as
+  the "ducktainer" service (`ducktainer serve` as LocalSystem), with its data
+  in %ProgramData%\ducktainer. People sign in with their Windows accounts;
+  the service sets its own restart-on-failure and the data folder's ACL when
+  it starts. Uninstalling keeps the data.
+-->
+<Wix xmlns="http://wixtoolset.org/schemas/v4/wxs">
+  <Package Name="ducktainer" Manufacturer="ducktainer" Version="$(Version)" Scope="perMachine"
+           UpgradeCode="5B0C6E4D-2C7B-4E8A-9F1D-7A3E8C2D9B41" Compressed="yes">
+    <MajorUpgrade DowngradeErrorMessage="A newer version of ducktainer is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <Icon Id="ducktainer.ico" SourceFile="$(sys.SOURCEFILEDIR)ducktainer.ico" />
+    <Property Id="ARPPRODUCTICON" Value="ducktainer.ico" />
+    <Property Id="ARPURLINFOABOUT" Value="https://github.com/leandrofus/ducktainer" />
+    <Property Id="ARPHELPLINK" Value="https://github.com/leandrofus/ducktainer" />
+
+    <StandardDirectory Id="ProgramFiles64Folder">
+      <Directory Id="INSTALLFOLDER" Name="ducktainer">
+        <Component Id="Service">
+          <File Id="ducktainer.exe" Source="$(Exe)" KeyPath="yes" />
+          <ServiceInstall Id="ServiceInstall" Name="ducktainer" DisplayName="ducktainer"
+                          Description="Docker management web UI (http://127.0.0.1:9900)"
+                          Type="ownProcess" Start="auto" ErrorControl="normal" Account="LocalSystem"
+                          Arguments="serve" Vital="yes" />
+          <ServiceControl Id="ServiceControl" Name="ducktainer" Start="install" Stop="both" Remove="uninstall" Wait="yes" />
+          <Environment Id="Path" Name="PATH" Value="[INSTALLFOLDER]" Part="last" Action="set" System="yes" Permanent="no" />
+        </Component>
+        <Component Id="Icon">
+          <File Id="ducktainer.ico" Source="$(sys.SOURCEFILEDIR)ducktainer.ico" KeyPath="yes" />
+        </Component>
+      </Directory>
+    </StandardDirectory>
+
+    <!-- Start menu: an internet shortcut to the UI (no console window) -->
+    <StandardDirectory Id="ProgramMenuFolder">
+      <Component Id="StartMenu">
+        <IniFile Id="UrlTarget" Name="ducktainer.url" Directory="ProgramMenuFolder" Section="InternetShortcut" Key="URL" Value="http://127.0.0.1:9900/" Action="createLine" />
+        <IniFile Id="UrlIcon" Name="ducktainer.url" Directory="ProgramMenuFolder" Section="InternetShortcut" Key="IconFile" Value="[INSTALLFOLDER]ducktainer.ico" Action="createLine" />
+        <IniFile Id="UrlIconIndex" Name="ducktainer.url" Directory="ProgramMenuFolder" Section="InternetShortcut" Key="IconIndex" Value="0" Action="createLine" />
+        <RemoveFile Id="Url" Name="ducktainer.url" On="uninstall" />
+        <RegistryValue Root="HKCU" Key="Software\ducktainer" Name="StartMenu" Type="integer" Value="1" KeyPath="yes" />
+      </Component>
+    </StandardDirectory>
+
+    <Feature Id="Main">
+      <ComponentRef Id="Service" />
+      <ComponentRef Id="Icon" />
+      <ComponentRef Id="StartMenu" />
+    </Feature>
+  </Package>
+</Wix>

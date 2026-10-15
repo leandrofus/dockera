@@ -162,21 +162,30 @@ type Auth struct {
 	SessionHours int      `json:"session_hours"`
 }
 
-// DefaultAuth: members of `docker` can already control the daemon, so they
-// are admins; extra groups are created by the packages.
+// DefaultAuth: members of `docker` (Administrators and docker-users on
+// Windows) can already control the daemon, so they are admins; extra groups
+// are created by the packages.
 func DefaultAuth(pamAvailable bool) *Auth {
+	admins := DefaultAdminGroups
+	if len(admins) == 0 {
+		admins = []string{"docker", "ducktainer-admins"}
+	}
 	return &Auth{
 		PAM:          pamAvailable,
 		PAMService:   "ducktainer",
 		TokenLogin:   true,
-		AdminGroups:  []string{"docker", "ducktainer-admins"},
+		AdminGroups:  append([]string(nil), admins...),
 		ViewerGroups: []string{"ducktainer-viewers"},
 		SessionHours: 12,
 	}
 }
 
-// PAMAvailable is set by main from the auth package (avoids an import cycle).
-var PAMAvailable bool
+// PAMAvailable and DefaultAdminGroups are set by main from the auth package
+// (avoids an import cycle).
+var (
+	PAMAvailable       bool
+	DefaultAdminGroups []string
+)
 
 type Config struct {
 	// TokenHash is the SHA-256 of the access token; the token itself is
@@ -209,9 +218,13 @@ var DefaultTemplateSources = []TemplateSource{
 }
 
 // Dir returns the data directory: $DUCKTAINER_HOME, /var/lib/ducktainer for root,
-// or $XDG_CONFIG_HOME/ducktainer.
+// or $XDG_CONFIG_HOME/ducktainer. On Windows the service (and an elevated
+// administrator, once it's installed) uses %ProgramData%\ducktainer.
 func Dir() string {
 	if d := os.Getenv("DUCKTAINER_HOME"); d != "" {
+		return d
+	}
+	if d := machineDir(); d != "" {
 		return d
 	}
 	if os.Geteuid() == 0 {

@@ -7,6 +7,7 @@ import (
 	"io"
 	"net"
 	"os"
+	"runtime"
 	"time"
 )
 
@@ -30,9 +31,10 @@ type helperResp struct {
 // Login verifies a system user's password with whatever is available:
 // PAM in-process when running as root, the root helper when running as the
 // unprivileged service user, or in-process PAM as a last resort (works
-// with pam_sss, or for the invoking user's own password).
+// with pam_sss, or for the invoking user's own password). Windows has no
+// helper: LogonUser needs no privilege.
 func Login(service, user, password, rhost string) error {
-	if os.Geteuid() != 0 {
+	if os.Geteuid() != 0 && runtime.GOOS != "windows" {
 		if _, err := os.Stat(HelperSocket); err == nil {
 			return viaHelper(helperReq{service, user, password, rhost})
 		}
@@ -46,6 +48,8 @@ func Login(service, user, password, rhost string) error {
 // Mode describes how Login will authenticate, for diagnostics.
 func Mode() string {
 	switch {
+	case runtime.GOOS == "windows":
+		return "Windows accounts (LogonUser)"
 	case os.Geteuid() == 0 && Available:
 		return "pam (in-process, root)"
 	case fileExists(HelperSocket):

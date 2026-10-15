@@ -1433,4 +1433,9 @@ export const ru: Record<string, string> = {
   "{0}: restarting tasks": "{0}: перезапуск задач",
   "{0}: rolling back": "{0}: откат",
   "{0}: updating to {1}": "{0}: обновление до {1}",
+  // windows
+  "Access is granted on this computer: ducktainer trusts Windows accounts and their local groups.": "Доступ выдаётся на этом компьютере: ducktainer доверяет учётным записям Windows и их локальным группам.",
+  "Skip this if the person already has an account on this computer (or in your domain). Run the commands in a terminal opened as administrator.": "Пропустите этот шаг, если у человека уже есть учётная запись на этом компьютере (или в вашем домене). Выполняйте команды в терминале, открытом от имени администратора.",
+  "Windows accounts (local or of the domain) whose local groups map to a role.": "Учётные записи Windows (локальные или доменные), локальные группы которых сопоставлены с ролью.",
+  "Windows accounts of this computer or its domain, with the role of their local groups.": "Учётные записи Windows этого компьютера или его домена с ролью их локальных групп.",
 }

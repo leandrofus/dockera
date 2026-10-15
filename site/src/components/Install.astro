@@ -46,10 +46,11 @@ const variants = release
             <button class="copy" type="button" data-copy data-label={t.copy} data-done={t.copied}>{t.copy}</button>
           </div>
           {variants.map((v, i) => (
-            <pre data-sys={v.sys} data-arch={v.arch} data-text={v.lines?.join('\n') ?? ''} hidden={i !== 0}>{v.lines ? v.lines.map((l, j) => <>{j > 0 && '\n'}<span class="p">$ </span>{l}</>) : <span set:html={t.noRelease} />}</pre>
+            <pre data-sys={v.sys} data-arch={v.arch} data-kind={v.sys === 'dnf' || v.sys === 'apt' ? 'pkg' : v.lines?.some((l) => l.includes('.msi')) ? 'msi' : 'bin'} data-text={v.lines?.join('\n') ?? ''} hidden={i !== 0}>{v.lines ? v.lines.map((l, j) => <>{j > 0 && '\n'}<span class="p">$ </span>{l}</>) : <span set:html={t.noRelease} />}</pre>
           ))}
         </div>
         <p class="after" data-after="pkg" set:html={t.afterPkg} />
+        <p class="after" data-after="msi" hidden set:html={t.afterMsi} />
         <p class="after" data-after="bin" hidden set:html={t.afterBin} />
       </>
     ) : (
@@ -72,9 +73,8 @@ const variants = release
       root.querySelectorAll<HTMLElement>('pre[data-sys]').forEach((p) => {
         p.hidden = p.dataset.sys !== sys || p.dataset.arch !== select.value
       })
-      const pkg = sys === 'dnf' || sys === 'apt'
-      root.querySelector<HTMLElement>('[data-after="pkg"]')!.hidden = !pkg
-      root.querySelector<HTMLElement>('[data-after="bin"]')!.hidden = pkg
+      const kind = root.querySelector<HTMLElement>('pre[data-sys]:not([hidden])')?.dataset.kind
+      root.querySelectorAll<HTMLElement>('[data-after]').forEach((p) => (p.hidden = p.dataset.after !== kind))
       // a release without the file for this system shows a link, not a command
       copy.hidden = !root.querySelector<HTMLElement>('pre[data-sys]:not([hidden])')?.dataset.text
     }

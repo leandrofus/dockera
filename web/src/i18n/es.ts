@@ -1424,4 +1424,9 @@ export const es: Record<string, string> = {
   "{0}: restarting tasks": "{0}: reiniciando tareas",
   "{0}: rolling back": "{0}: revirtiendo",
   "{0}: updating to {1}": "{0}: actualizando a {1}",
+  // windows
+  "Access is granted on this computer: ducktainer trusts Windows accounts and their local groups.": "El acceso se concede en este equipo: ducktainer confía en las cuentas de Windows y sus grupos locales.",
+  "Skip this if the person already has an account on this computer (or in your domain). Run the commands in a terminal opened as administrator.": "Omite este paso si la persona ya tiene una cuenta en este equipo (o en tu dominio). Ejecuta los comandos en una terminal abierta como administrador.",
+  "Windows accounts (local or of the domain) whose local groups map to a role.": "Cuentas de Windows (locales o del dominio) cuyos grupos locales se asignan a un rol.",
+  "Windows accounts of this computer or its domain, with the role of their local groups.": "Cuentas de Windows de este equipo o de su dominio, con el rol de sus grupos locales.",
 }

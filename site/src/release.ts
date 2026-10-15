@@ -56,6 +56,14 @@ export function installCommands(rel: Release, sys: System, arch: Arch): string[]
       a = find(new RegExp(`_${arch}\\.deb$`))
       return a ? [`curl -fLO ${a.url}`, `sudo apt install ./${a.name}`] : null
     case 'windows':
+      // the MSI installs the service with sign-in by Windows account (x64)
+      a = arch === 'amd64' ? find(/^ducktainer-latest-x64\.msi$/) : undefined
+      if (a)
+        return [
+          `curl.exe -fLO ${latestURL(a.name)}`,
+          `Start-Process msiexec -Wait -ArgumentList '/i ${a.name}'`,
+          '& "$env:ProgramFiles\\ducktainer\\ducktainer.exe" engine install',
+        ]
       a = find(new RegExp(`^ducktainer-windows-${arch}\\.exe$`))
       // no Docker Desktop needed: engine install sets up Docker in WSL 2
       return a ? [`curl.exe -fLo ducktainer.exe ${latestURL(a.name)}`, '.\\ducktainer.exe engine install', '.\\ducktainer.exe ui'] : null

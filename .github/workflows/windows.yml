@@ -22,6 +22,36 @@ jobs:
       - name: Go tests
         run: go test ./...
 
+  msi:
+    # The installer for real: service, sign-in with Windows accounts,
+    # upgrade and uninstall
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - name: Build two versions
+        run: |
+          go build -trimpath -ldflags "-s -w -X main.version=v0.0.1" -o dist/1/ducktainer.exe .
+          go build -trimpath -ldflags "-s -w -X main.version=v0.0.2" -o dist/2/ducktainer.exe .
+      - name: MSI
+        shell: pwsh
+        run: |
+          ./packaging/windows/build-msi.ps1 -Version 0.0.1 -Exe dist/1/ducktainer.exe -Out dist/ducktainer-0.0.1-x64.msi
+          ./packaging/windows/build-msi.ps1 -Version 0.0.2 -Exe dist/2/ducktainer.exe -Out dist/ducktainer-0.0.2-x64.msi
+      - uses: actions/upload-artifact@v4
+        with:
+          name: msi
+          path: dist/ducktainer-0.0.1-x64.msi
+      - name: Install, sign in, upgrade, uninstall
+        shell: pwsh
+        run: ./packaging/windows/test-msi.ps1 -Msi dist/ducktainer-0.0.1-x64.msi -Upgrade dist/ducktainer-0.0.2-x64.msi -UpgradeVersion v0.0.2 -Uninstall
+      - name: Logs
+        if: failure()
+        shell: pwsh
+        run: Get-Content "$env:ProgramData\ducktainer\ducktainer.log" -ErrorAction SilentlyContinue
+
   native:
     # Windows containers: dockerd.exe as a service, reached through npipe
     runs-on: windows-2022
@@ -64,6 +94,7 @@ jobs:
   wsl:
     # Linux containers: Docker in a WSL 2 distribution of ducktainer's own
     runs-on: windows-latest
+    needs: msi
     steps:
       - uses: actions/checkout@v5
       - uses: actions/setup-go@v6
@@ -100,3 +131,13 @@ jobs:
           $running = wsl.exe -d ducktainer -u root -- docker inspect -f '{{.State.Running}}' squeak-wsl
           "running: $running"
           if ($running -ne 'true') { throw 'the container stopped with the distribution' }
+      - uses: actions/download-artifact@v4
+        with:
+          name: msi
+      - name: The service (LocalSystem) reaches WSL through the relay
+        shell: pwsh
+        run: ./packaging/windows/test-msi.ps1 -Msi ducktainer-0.0.1-x64.msi -Wsl squeak-wsl
+      - name: Logs
+        if: failure()
+        shell: pwsh
+        run: Get-Content "$env:ProgramData\ducktainer\ducktainer.log" -ErrorAction SilentlyContinue

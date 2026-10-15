@@ -42,7 +42,22 @@ sudo apt install ./ducktainer_latest_amd64.deb
 
 При обновлении настройки сохраняются, а служба перезапускается, только если она была запущена.
 
-**Один бинарный файл** (любой Linux, macOS или Windows; вход только по токену, без PAM):
+**Windows (MSI)**, в PowerShell от имени администратора:
+
+```powershell
+curl.exe -fLO https://github.com/leandrofus/ducktainer/releases/latest/download/ducktainer-latest-x64.msi
+Start-Process msiexec -Wait -ArgumentList '/i ducktainer-latest-x64.msi'
+```
+
+Установщик:
+
+- помещает `ducktainer.exe` в `C:\Program Files\ducktainer` и добавляет его в PATH;
+- регистрирует службу `ducktainer` (`ducktainer serve` от имени LocalSystem, перезапускается при сбое), слушающую на `http://127.0.0.1:9900`, и пункт в меню «Пуск»;
+- хранит данные в `C:\ProgramData\ducktainer`, доступном только SYSTEM и администраторам. В терминале администратора `ducktainer token`, `ducktainer allow` и `ducktainer auth` работают с конфигурацией службы.
+
+Вход выполняется под учётными записями Windows (локальными или `ДОМЕН\пользователь`). Члены групп «Администраторы», `docker-users` и `ducktainer-admins` — администраторы; члены `ducktainer-viewers` получают доступ только для чтения. Роли определяются локальными группами, поэтому доменная группа учитывается, если она входит в одну из них. При обновлении конфигурация сохраняется, а при удалении `C:\ProgramData\ducktainer` остаётся на месте. Если Docker на машине ещё нет, установите его командой `ducktainer engine install` (ниже).
+
+**Один бинарный файл** (любой Linux, macOS или Windows; без PAM в Linux и macOS вход только по токену, а в Windows также под учётными записями Windows):
 
 ```sh
 ./ducktainer serve            # http://127.0.0.1:9900, выводит токен доступа
@@ -60,7 +75,7 @@ sudo apt install ./ducktainer_latest_amd64.deb
 .\ducktainer.exe ui
 ```
 
-- `wsl` (по умолчанию) создаёт дистрибутив WSL 2 `ducktainer` из образа Ubuntu (проверяется по SHA256SUMS Ubuntu), запускает там `docker.io` с systemd и добавляет хост `wsl` (`wsl://ducktainer`). Задача при входе в систему не даёт дистрибутиву остановиться, поэтому контейнеры не останавливаются, когда WSL стал бы его выключать (`--no-keepalive` отключает это). Дистрибутивы WSL принадлежат пользователю: запускайте ducktainer от имени этого пользователя.
+- `wsl` (по умолчанию) создаёт дистрибутив WSL 2 `ducktainer` из образа Ubuntu (проверяется по SHA256SUMS Ubuntu), запускает там `docker.io` с systemd и добавляет хост `wsl` (`wsl://ducktainer`). При входе в систему задача запускает `ducktainer engine relay` для пользователя, выполнившего установку. Ретранслятор не даёт дистрибутиву остановиться, поэтому контейнеры не останавливаются, когда WSL стал бы его выключать. Он также предоставляет Docker дистрибутива через именованный канал, потому что дистрибутивы WSL принадлежат пользователю, а служба (LocalSystem) не может их запускать. Служба добавляет хост `wsl`, когда находит ретранслятор администратора, и эти контейнеры работают, пока этот пользователь находится в системе (`--no-keepalive` отключает задачу).
 - `native` включает компонент Containers (и Hyper-V в Windows 10/11), устанавливает `dockerd.exe`, `docker.exe` и плагин compose в `C:\Program Files\Docker`, регистрирует службу `docker` и направляет хост `local` на `npipe:////./pipe/docker_engine`. `--version` и `--sha256` фиксируют версию Docker. В Windows Home компонента Containers нет: используйте `wsl`.
 - Если Windows требует перезагрузки (для включения WSL или компонента), перезагрузите систему и выполните эту же команду снова.
 
@@ -194,7 +209,7 @@ ducktainer управляет Docker API каждого хоста, что эк�
 | `ducktainer ui` | Как `serve` на 127.0.0.1, и открывает браузер |
 | `ducktainer agent` | Агент с исходящим подключением (`--server`, `--name`, `--fingerprint`, `--socket`, `--install-service`; токен в `DUCKTAINER_AGENT_TOKEN`) |
 | `ducktainer expose` | Публикует только Docker API, с защитой (список разрешённых + токен + TLS; `--read-only`, `--no-exec`) |
-| `ducktainer engine install [--mode wsl\|native] \| status` | Windows: установка Docker без Docker Desktop |
+| `ducktainer engine install [--mode wsl\|native] \| status \| relay` | Windows: установка Docker без Docker Desktop |
 | `ducktainer setup [--dry-run] [--socket PATH]` | Приведение службы в соответствие с установкой Docker |
 | `ducktainer install-service [serve flags]` | Установка службы systemd для одиночного бинарного файла (root) |
 | `ducktainer auth show \| set … \| test <user>` | Вход системными пользователями и сопоставление ролей |

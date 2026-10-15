@@ -1,3 +1,5 @@
+//go:build !windows
+
 package auth
 
 import (
@@ -8,13 +10,9 @@ import (
 	"strings"
 )
 
-// GroupInfo describes a POSIX group and who is in it.
-type GroupInfo struct {
-	Name    string   `json:"name"`
-	Exists  bool     `json:"exists"`
-	GID     string   `json:"gid,omitempty"`
-	Members []string `json:"members"`
-}
+// DefaultAdminGroups are the groups whose members administer ducktainer on a
+// fresh install.
+func DefaultAdminGroups() []string { return []string{"docker", "ducktainer-admins"} }
 
 // getent runs `getent db [key]` (NSS: works with LDAP/SSSD), falling back
 // to the local files when getent is unavailable.

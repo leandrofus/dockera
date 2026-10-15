@@ -31,6 +31,7 @@ interface AccessInfo {
   allow: string[]
   allow_flags: string[]
   service_user: string
+  os: string
   pam: { enabled: boolean; built: boolean; mode: string }
   token_login: boolean
   allow_root: boolean
@@ -178,6 +179,8 @@ function GiveAccess({ info, onClose }: { info: AccessInfo; onClose: () => void }
   const roleGroups = info.roles.find((r) => r.role === role)?.groups ?? []
   const pick = roleGroups.find((g) => g.exists && g.name !== 'docker') ?? roleGroups.find((g) => g.exists) ?? roleGroups.find((g) => g.name !== 'docker') ?? roleGroups[0]
   const group = pick?.name ?? (role === 'admin' ? 'ducktainer-admins' : 'ducktainer-viewers')
+  const win = info.os === 'windows'
+  const q = (s: string) => (/[\s&]/.test(s) ? `"${s}"` : s)
   return (
     <Drawer onClose={onClose} width={520}>
       <div className="acc-drawer">
@@ -186,7 +189,7 @@ function GiveAccess({ info, onClose }: { info: AccessInfo; onClose: () => void }
           <h3 className="grow">{t('Give someone access')}</h3>
           <button className="icon-btn" onClick={onClose}><X size={16} /></button>
         </div>
-        <p className="help">{t('Access is granted on the server itself: ducktainer trusts system accounts and their groups.')}</p>
+        <p className="help">{win ? t('Access is granted on this computer: ducktainer trusts Windows accounts and their local groups.') : t('Access is granted on the server itself: ducktainer trusts system accounts and their groups.')}</p>
         <div className="row gap wrap">
           <input autoFocus className="grow" placeholder={t('username')} value={username} onChange={(e) => setUsername(e.target.value.replace(/\s/g, ''))} />
           <div className="seg seg-text">
@@ -199,16 +202,16 @@ function GiveAccess({ info, onClose }: { info: AccessInfo; onClose: () => void }
             <span className="step-n">1</span>
             <div className="step-body">
               <strong>{t('Make sure the system account exists')}</strong>
-              <p className="help">{t('Skip this if the person already has an account on this server (or in your LDAP/SSSD directory).')}</p>
-              <Cmd>{`sudo useradd -m ${user} && sudo passwd ${user}`}</Cmd>
+              <p className="help">{win ? t('Skip this if the person already has an account on this computer (or in your domain). Run the commands in a terminal opened as administrator.') : t('Skip this if the person already has an account on this server (or in your LDAP/SSSD directory).')}</p>
+              <Cmd>{win ? `net user ${user} * /add` : `sudo useradd -m ${user} && sudo passwd ${user}`}</Cmd>
             </div>
           </li>
           <li className="step">
             <span className="step-n">2</span>
             <div className="step-body">
               <strong>{t('Add the account to the role group')}</strong>
-              {!pick?.exists && <Cmd>{`sudo groupadd ${group}`}</Cmd>}
-              <Cmd>{`sudo usermod -aG ${group} ${user}`}</Cmd>
+              {!pick?.exists && <Cmd>{win ? `net localgroup ${q(group)} /add` : `sudo groupadd ${group}`}</Cmd>}
+              <Cmd>{win ? `net localgroup ${q(group)} ${user} /add` : `sudo usermod -aG ${group} ${user}`}</Cmd>
               {group === 'docker' && <p className="help tone-warn">{t('Members of docker can also use the docker CLI directly on this server.')}</p>}
               <p className="help">{t('Group membership is checked at sign-in and every 5 minutes, so removing someone revokes access quickly.')}</p>
             </div>
@@ -217,7 +220,7 @@ function GiveAccess({ info, onClose }: { info: AccessInfo; onClose: () => void }
             <span className="step-n">3</span>
             <div className="step-body">
               <strong>{t('Check it (optional)')}</strong>
-              <Cmd>{`sudo ducktainer auth test ${user}`}</Cmd>
+              <Cmd>{win ? `ducktainer auth test ${user}` : `sudo ducktainer auth test ${user}`}</Cmd>
             </div>
           </li>
           <li className="step">
@@ -277,7 +280,7 @@ function People({ info, draft, setAuth, go }: { info: AccessInfo; draft: Draft; 
         <div className="acc-block-head">
           <div>
             <h4><Users size={15} /> {t('People with access')} <span className="count">{people.length}</span></h4>
-            <p className="help">{t('System accounts (PAM: local users, LDAP/SSSD/FreeIPA) whose groups map to a role.')} {info.pam.enabled && <code>{info.pam.mode}</code>}</p>
+            <p className="help">{info.os === 'windows' ? t('Windows accounts (local or of the domain) whose local groups map to a role.') : t('System accounts (PAM: local users, LDAP/SSSD/FreeIPA) whose groups map to a role.')} {info.pam.enabled && <code>{info.pam.mode}</code>}</p>
           </div>
           <button className="btn btn-primary btn-sm" onClick={() => setGiving(true)}><UserPlus size={14} /> {t('Give access')}</button>
         </div>
@@ -296,7 +299,7 @@ function People({ info, draft, setAuth, go }: { info: AccessInfo; draft: Draft; 
                     onContextMenu={menu(() => [
                       { header: u },
                       { label: t('Copy name'), onClick: () => copy(u) },
-                      ...p.via.filter(Boolean).map((g) => ({ label: t('Copy command to remove from {0}', g), onClick: () => copy(`sudo gpasswd -d ${u} ${g}`) })),
+                      ...p.via.filter(Boolean).map((g) => ({ label: t('Copy command to remove from {0}', g), onClick: () => copy(info.os === 'windows' ? `net localgroup ${/\s/.test(g) ? `"${g}"` : g} ${u} /delete` : `sudo gpasswd -d ${u} ${g}`) })),
                     ])}
                   >
                     <td><span className="row gap"><Avatar name={u} size={22} /> <strong>{u}</strong></span></td>
@@ -370,7 +373,7 @@ function Network({ info, draft, setAllow }: { info: AccessInfo; draft: Draft; se
         <div className="alert alert-warn">
           <AlertTriangle size={14} />
           <span>
-            {t('ducktainer only listens on this machine (loopback), so nobody else can reach it yet. Add allowed hosts below and restart the service so it listens on the network:')} <code>sudo systemctl restart ducktainer</code>
+            {t('ducktainer only listens on this machine (loopback), so nobody else can reach it yet. Add allowed hosts below and restart the service so it listens on the network:')} <code>{info.os === 'windows' ? 'Restart-Service ducktainer' : 'sudo systemctl restart ducktainer'}</code>
           </span>
         </div>
       )}
@@ -464,7 +467,7 @@ function Network({ info, draft, setAllow }: { info: AccessInfo; draft: Draft; se
         <p className="help">{t('Checks against the saved list.')}</p>
       </div>
       <p className="help">
-        <Terminal size={12} /> {t('Also from the terminal:')} <code>sudo ducktainer allow add 192.168.1.0/24</code> · <code>sudo ducktainer allow ls</code>
+        <Terminal size={12} /> {t('Also from the terminal:')} <code>{info.os === 'windows' ? '' : 'sudo '}ducktainer allow add 192.168.1.0/24</code> · <code>{info.os === 'windows' ? '' : 'sudo '}ducktainer allow ls</code>
       </p>
     </div>
   )
@@ -481,17 +484,17 @@ function SignIn({ info, draft, setAuth }: { info: AccessInfo; draft: Draft; setA
         <h4><KeyRound size={15} /> {t('Sign-in methods')}</h4>
         <Setting
           title={t('System users')}
-          desc={info.pam.built ? <>{t('Accounts of this server or its directory (LDAP/SSSD/FreeIPA), with the role of their groups.')} <code>{info.pam.mode}</code></> : t('This build has no PAM support (system users). Install the rpm/deb packages to sign in with system users.')}
+          desc={info.pam.built ? <>{info.os === 'windows' ? t('Windows accounts of this computer or its domain, with the role of their local groups.') : t('Accounts of this server or its directory (LDAP/SSSD/FreeIPA), with the role of their groups.')} <code>{info.pam.mode}</code></> : t('This build has no PAM support (system users). Install the rpm/deb packages to sign in with system users.')}
         >
           <Switch checked={a.pam} disabled={!info.pam.built && !a.pam} onChange={(v) => setAuth({ pam: v })} />
         </Setting>
-        <Setting title={t('Emergency token')} desc={<>{t('A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Only its hash is stored: create a new one with')} <code>sudo ducktainer token --rotate</code></>}>
+        <Setting title={t('Emergency token')} desc={<>{t('A single secret that signs in as administrator and authorizes the API (Authorization: Bearer). Only its hash is stored: create a new one with')} <code>{info.os === 'windows' ? '' : 'sudo '}ducktainer token --rotate</code></>}>
           <Switch checked={a.token_login} onChange={(v) => setAuth({ token_login: v })} />
         </Setting>
         {!a.pam && !a.token_login && <div className="alert alert-bad"><AlertTriangle size={14} /> {t('Keep at least one sign-in method enabled.')}</div>}
-        <Setting title={t('Allow root')} desc={t('Lets the root account sign in. Better to use a personal account in an admin group.')} tone={a.allow_root ? 'warn' : undefined}>
+        {info.os !== 'windows' && <Setting title={t('Allow root')} desc={t('Lets the root account sign in. Better to use a personal account in an admin group.')} tone={a.allow_root ? 'warn' : undefined}>
           <Switch checked={a.allow_root} onChange={(v) => setAuth({ allow_root: v })} />
-        </Setting>
+        </Setting>}
         <Setting title={t('Session length')} desc={t('After this, people sign in again. Removing someone from a group takes effect within 5 minutes anyway.')}>
           <span className="row gap">
             <input type="number" min={1} max={720} style={{ width: 76 }} value={a.session_hours} onChange={(e) => setAuth({ session_hours: Number(e.target.value) || 12 })} />
