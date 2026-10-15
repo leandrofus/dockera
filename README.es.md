@@ -42,7 +42,22 @@ El paquete:
 
 Las actualizaciones conservan la configuración y solo reinician el servicio si estaba en marcha.
 
-**Binario suelto** (cualquier Linux, macOS o Windows; solo con token, sin PAM):
+**Windows (MSI)**, desde un PowerShell de administrador:
+
+```powershell
+curl.exe -fLO https://github.com/leandrofus/ducktainer/releases/latest/download/ducktainer-latest-x64.msi
+Start-Process msiexec -Wait -ArgumentList '/i ducktainer-latest-x64.msi'
+```
+
+El instalador:
+
+- pone `ducktainer.exe` en `C:\Program Files\ducktainer` y en el PATH;
+- registra el servicio `ducktainer` (`ducktainer serve` como LocalSystem, que se reinicia si falla), escuchando en `http://127.0.0.1:9900`, y una entrada en el menú Inicio;
+- guarda los datos en `C:\ProgramData\ducktainer`, que solo pueden leer SYSTEM y los Administradores. Desde una terminal de administrador, `ducktainer token`, `ducktainer allow` o `ducktainer auth` trabajan sobre la configuración del servicio.
+
+Se entra con las cuentas de Windows (locales, o `DOMINIO\usuario`). Los miembros de Administradores, `docker-users` o `ducktainer-admins` son administradores; los de `ducktainer-viewers` tienen acceso de solo lectura. Los roles salen de los grupos locales, así que un grupo del dominio cuenta cuando es miembro de uno de ellos. Las actualizaciones conservan la configuración, y desinstalar deja `C:\ProgramData\ducktainer` en su sitio. Si la máquina todavía no tiene Docker, instálalo con `ducktainer engine install` (más abajo).
+
+**Binario suelto** (cualquier Linux, macOS o Windows; sin PAM, en Linux y macOS solo se entra con token, y en Windows también con cuentas de Windows):
 
 ```sh
 ./ducktainer serve            # http://127.0.0.1:9900; muestra el token de acceso
@@ -60,7 +75,7 @@ Sin el paquete, los datos van al directorio de configuración del usuario (`~/.c
 .\ducktainer.exe ui
 ```
 
-- `wsl` (por defecto) crea la distribución WSL 2 `ducktainer` con la imagen de Ubuntu (verificada con su SHA256SUMS), corre `docker.io` con systemd y añade el host `wsl` (`wsl://ducktainer`). Una tarea al iniciar sesión mantiene la distribución en marcha, para que los contenedores no se paren cuando WSL la apagaría (`--no-keepalive` la omite). Las distribuciones WSL son de un usuario: ejecuta ducktainer con ese usuario.
+- `wsl` (por defecto) crea la distribución WSL 2 `ducktainer` con la imagen de Ubuntu (verificada con su SHA256SUMS), corre `docker.io` con systemd y añade el host `wsl` (`wsl://ducktainer`). Al iniciar sesión, una tarea arranca `ducktainer engine relay` para el usuario que hizo la instalación. El relay mantiene la distribución en marcha, para que los contenedores no se paren cuando WSL la apagaría. También sirve el Docker de la distribución por un named pipe, porque las distribuciones WSL son de un usuario y el servicio (LocalSystem) no puede arrancarlas. El servicio añade el host `wsl` cuando encuentra el relay de un administrador, y esos contenedores corren mientras ese usuario tenga la sesión iniciada (`--no-keepalive` omite la tarea).
 - `native` activa la característica Containers (y Hyper-V en Windows 10/11), instala `dockerd.exe`, `docker.exe` y el plugin compose en `C:\Program Files\Docker`, registra el servicio `docker` y apunta el host `local` a `npipe:////./pipe/docker_engine`. `--version` y `--sha256` fijan la versión de Docker. Windows Home no tiene Containers: usa `wsl`.
 - Si Windows pide reiniciar (para activar WSL o una característica), reinicia y vuelve a ejecutar el mismo comando.
 
@@ -163,7 +178,7 @@ ducktainer controla la API de Docker de cada host, lo que equivale a root en ell
 - **Accesos** (la página inicial de cada host): todos los puertos de todos los contenedores, separados en puertos web (se abren con un clic) y puertos TCP/UDP. Para servicios conocidos (PostgreSQL, MySQL/MariaDB, MongoDB, Redis, RabbitMQ) arma la cadena de conexión con las credenciales que encuentra en el entorno de compose. Las etiquetas de compose mandan sobre la detección: `ducktainer.url=https://app.ejemplo.com`, `ducktainer.url.<puerto>=…` y `ducktainer.kind.<puerto>=http|tcp`.
 - **Túneles privados**: clic derecho en un puerto → "Abrir un túnel…" para llegar a él a través del servidor ducktainer, también a puertos no publicados y a hosts detrás de un agente o NAT. Un túnel se cierra tras 30 minutos sin conexiones, a una hora fija, o queda abierto (también tras reinicios) hasta que lo cierres. Acepta solo la dirección que lo abrió, o todas las que pueden llegar a ducktainer.
 - **Publicación en internet con Cloudflare**: "Exponer a internet…" en un puerto web lo publica con `cloudflared` (se descarga y verifica su checksum si no está instalado). Sin cuenta obtienes una dirección `trycloudflare.com` aleatoria; con un token de API (Configuración → Cloudflare) cada servicio recibe un nombre fijo en tus propios dominios. El acceso puede ser público o limitarse a algunas IPs/hosts, a quien entre en ducktainer (opcionalmente solo algunos usuarios o grupos) o a quien tenga un enlace secreto, y puede caducar.
-- **Menú de inicio**: en una máquina con escritorio, las apps web de sus contenedores se pueden añadir a un menú "Containers" (Linux, entradas freedesktop) o a Inicio › Programas › Containers (Windows), una a una o automáticamente. **Configuración → Acceso → Menú inicio**.
+- **Menú de inicio**: en una máquina con escritorio, las apps web de sus contenedores se pueden añadir a un menú "Containers" (Linux, entradas freedesktop) o a Inicio › Programas › Containers (Windows), una a una o automáticamente; el menú se actualiza solo (en Linux, mediante una unidad de usuario de systemd que `ducktainer setup` instala para todos los usuarios). **Configuración → Acceso → Menú inicio**.
 - **Contenedores**: tabla agrupada por stack o kanban por estado (arrastra una tarjeta a "Detenido" para pararlo), vistas guardadas, acciones en lote y vista rápida. Cada ficha tiene Resumen (CPU/memoria/red en vivo y actividad), Logs, Terminal, Archivos, Rendimiento, Procesos, Configuración e Inspección.
 - **Editar contenedores**: Docker no permite modificar un contenedor en el sitio, así que ducktainer crea uno nuevo con los cambios, intercambia los nombres y borra el viejo. Los volúmenes se conservan y, si el nuevo no arranca, se restaura el original. También se pueden renombrar, duplicar, actualizar (pull + recrear) y guardar como imagen (commit).
 - **Stacks compose**:
@@ -194,7 +209,7 @@ ducktainer controla la API de Docker de cada host, lo que equivale a root en ell
 | `ducktainer ui` | Como `serve` en 127.0.0.1, y abre el navegador |
 | `ducktainer agent` | Agente saliente (`--server`, `--name`, `--fingerprint`, `--socket`, `--install-service`; token en `DUCKTAINER_AGENT_TOKEN`) |
 | `ducktainer expose` | Publica solo la API de Docker, protegida (lista + token + TLS; `--read-only`, `--no-exec`) |
-| `ducktainer engine install [--mode wsl\|native] \| status` | Windows: instala Docker sin Docker Desktop |
+| `ducktainer engine install [--mode wsl\|native] \| status \| relay` | Windows: instala Docker sin Docker Desktop |
 | `ducktainer setup [--dry-run] [--socket RUTA]` | Adapta el servicio a la instalación de Docker |
 | `ducktainer install-service [opciones de serve]` | Instala un servicio systemd para el binario suelto (root) |
 | `ducktainer auth show \| set … \| test <usuario>` | Inicio de sesión con usuarios del sistema y roles |

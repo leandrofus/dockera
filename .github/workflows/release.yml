@@ -2,9 +2,9 @@ name: Release
 
 # Runs on a tag like v0.2.0: tag.yml creates it (and starts this workflow)
 # when a version bump reaches main; pushing one by hand works too. Builds the
-# rpm/deb packages (amd64, arm64, with PAM) and the static binaries, and
-# attaches them to the GitHub release, plus version-less "latest" copies of
-# the packages for stable links.
+# rpm/deb packages (amd64, arm64, with PAM), the static binaries and the
+# Windows MSI, and attaches them to the GitHub release, plus version-less
+# "latest" copies of the packages for stable links.
 on:
   push:
     tags: ['v*']
@@ -69,8 +69,54 @@ jobs:
           else
             gh release create "$GITHUB_REF_NAME" $files --title "ducktainer ${GITHUB_REF_NAME#v}" --generate-notes --verify-tag
           fi
+
+  msi:
+    # Windows installer (service + sign-in with Windows accounts), built with
+    # WiX on Windows and added to the release made above
+    needs: release
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 22
+      - name: Web UI
+        run: cd web && npm install --no-audit --no-fund && npm run build
+      - name: MSI
+        shell: pwsh
+        run: |
+          $v = "$env:GITHUB_REF_NAME".TrimStart('v')
+          go build -trimpath -ldflags "-s -w -X main.version=$env:GITHUB_REF_NAME" -o dist/ducktainer.exe .
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          ./packaging/windows/build-msi.ps1 -Version $v -Exe dist/ducktainer.exe -Out "dist/ducktainer-$v-x64.msi"
+          Copy-Item "dist/ducktainer-$v-x64.msi" dist/ducktainer-latest-x64.msi
+      - name: Publish
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $v = "$env:GITHUB_REF_NAME".TrimStart('v')
+          gh release download $env:GITHUB_REF_NAME -p SHA256SUMS -D sums
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+          $lines = Get-Content sums/SHA256SUMS | Where-Object { $_ -notmatch '\.msi$' }
+          foreach ($f in "ducktainer-$v-x64.msi", 'ducktainer-latest-x64.msi') {
+            $lines += "$((Get-FileHash "dist/$f" -Algorithm SHA256).Hash.ToLower())  $f"
+          }
+          [IO.File]::WriteAllText("$PWD/dist/SHA256SUMS", ($lines -join "`n") + "`n")
+          gh release upload $env:GITHUB_REF_NAME "dist/ducktainer-$v-x64.msi" dist/ducktainer-latest-x64.msi dist/SHA256SUMS --clobber
+          if ($LASTEXITCODE) { exit $LASTEXITCODE }
+
+  site:
+    needs: [release, msi]
+    if: always() && needs.release.result == 'success'
+    runs-on: ubuntu-latest
+    steps:
       - name: Rebuild the site
         env:
           GH_TOKEN: ${{ github.token }}
+          GH_REPO: ${{ github.repository }}
         # releases made with GITHUB_TOKEN do not trigger other workflows
         run: gh workflow run pages.yml --ref main

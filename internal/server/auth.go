@@ -16,6 +16,7 @@ import (
 	"net/http"
 	"os"
 	"regexp"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -212,7 +213,7 @@ func (s *Server) setCookie(w http.ResponseWriter, sess Session) {
 
 func (s *Server) authInfo(w http.ResponseWriter, r *http.Request) {
 	a := s.Cfg.Snapshot().Auth
-	writeJSON(w, map[string]any{"pam": a.PAM, "token": a.TokenLogin, "version": s.Version})
+	writeJSON(w, map[string]any{"pam": a.PAM, "token": a.TokenLogin, "version": s.Version, "os": runtime.GOOS})
 }
 
 func (s *Server) login(w http.ResponseWriter, r *http.Request) {

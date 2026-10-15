@@ -15,3 +15,5 @@ func dialPipe(context.Context, string) (net.Conn, error) {
 }
 
 func hideWindow(*exec.Cmd) {}
+
+func dialRelay(context.Context, string) (net.Conn, bool, error) { return nil, false, nil }

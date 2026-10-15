@@ -5,6 +5,7 @@ import (
 	"bufio"
 	"context"
 	"crypto/tls"
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -86,6 +87,7 @@ Data and configuration: %s  (change with DUCKTAINER_HOME)
 func main() {
 	log.SetFlags(log.Ldate | log.Ltime)
 	config.PAMAvailable = auth.Available
+	config.DefaultAdminGroups = auth.DefaultAdminGroups()
 	var cmd string
 	var args []string
 	if len(os.Args) < 2 {
@@ -106,6 +108,9 @@ func main() {
 	var err error
 	switch cmd {
 	case "serve":
+		if runService(args) {
+			return
+		}
 		err = cmdServe(args, false)
 	case "ui":
 		err = cmdServe(args, true)
@@ -305,15 +310,21 @@ func cmdServe(args []string, openBrowser bool) error {
 	srv.StartExposures()
 	defer srv.StopExposures()
 	srv.StartShortcuts()
-	ln, err := listen(*addr, acl, tc)
-	if err != nil {
-		return err
-	}
 	scheme := "http"
 	if tc != nil {
 		scheme = "https"
 	}
 	uiURL := fmt.Sprintf("%s://%s", scheme, displayAddr(*addr))
+	ln, err := listen(*addr, acl, tc)
+	if err != nil {
+		// `ui` with ducktainer already running there (the Windows service,
+		// the systemd one): just open it
+		if openBrowser && runningAt(uiURL) {
+			i18n.Printf("ducktainer is already running at %s\n", uiURL)
+			return openURL(uiURL)
+		}
+		return err
+	}
 	fmt.Printf("\n  ducktainer %s\n\n", version)
 	fmt.Printf("  UI         %s\n", uiURL)
 	snap := cfg.Snapshot()
@@ -381,14 +392,38 @@ func cmdServe(args []string, openBrowser bool) error {
 	if openBrowser {
 		go func() {
 			time.Sleep(400 * time.Millisecond)
-			for _, b := range []string{"xdg-open", "open"} {
-				if exec.Command(b, uiURL).Start() == nil {
-					return
-				}
-			}
+			openURL(uiURL)
 		}()
 	}
 	return waitSignal(errc)
+}
+
+// openURL opens url in the default browser.
+func openURL(url string) error {
+	if runtime.GOOS == "windows" {
+		return exec.Command("rundll32.exe", "url.dll,FileProtocolHandler", url).Start()
+	}
+	var err error
+	for _, b := range []string{"xdg-open", "open"} {
+		if err = exec.Command(b, url).Start(); err == nil {
+			return nil
+		}
+	}
+	return err
+}
+
+// runningAt reports whether a ducktainer answers at url.
+func runningAt(url string) bool {
+	c := &http.Client{Timeout: 3 * time.Second, Transport: &http.Transport{TLSClientConfig: &tls.Config{InsecureSkipVerify: true}}}
+	resp, err := c.Get(url + "/api/auth")
+	if err != nil {
+		return false
+	}
+	defer resp.Body.Close()
+	var info struct {
+		Version *string `json:"version"`
+	}
+	return resp.StatusCode == http.StatusOK && json.NewDecoder(resp.Body).Decode(&info) == nil && info.Version != nil
 }
 
 func displayAddr(addr string) string {
@@ -822,6 +857,9 @@ func cmdDockerEnv(args []string) error {
 }
 
 func cmdInstall(args []string) error {
+	if runtime.GOOS == "windows" {
+		return i18n.Errorf("on Windows the service is installed by the MSI package (ducktainer-<version>-x64.msi, on the releases page)")
+	}
 	if runtime.GOOS != "linux" {
 		return i18n.Errorf("install-service is only available on Linux (systemd)")
 	}
@@ -1058,7 +1096,6 @@ func cmdSetup(args []string) error {
 		i18n.Printf("warning: could not prepare the start menu: %v\n", err)
 	} else if ok && !*quiet {
 		i18n.Printf("start menu: containers can be added from Settings → Access → Start menu\n")
-		i18n.Printf("  (open desktop sessions see the new menu after signing in again; on KDE, `kbuildsycoca6` refreshes it now)\n")
 	}
 	if !*quiet {
 		if plan.Mode == setup.ModeNone {
@@ -1072,8 +1109,8 @@ func cmdSetup(args []string) error {
 
 // cmdEngine installs Docker on Windows without Docker Desktop.
 func cmdEngine(args []string) error {
-	if len(args) == 0 || (args[0] != "install" && args[0] != "status") {
-		return i18n.Errorf("usage: ducktainer engine install [--mode wsl|native] [--distro NAME] [--version X.Y.Z] [--sha256 HASH] [--no-keepalive] | status")
+	if len(args) == 0 || (args[0] != "install" && args[0] != "status" && args[0] != "relay") {
+		return i18n.Errorf("usage: ducktainer engine install [--mode wsl|native] [--distro NAME] [--version X.Y.Z] [--sha256 HASH] [--no-keepalive] | status | relay [--distro NAME]")
 	}
 	fs := newFlagSet("engine")
 	mode := fs.String("mode", "wsl", i18n.Sprintf("wsl: Linux containers in a WSL 2 distribution · native: Windows containers with dockerd.exe"))
@@ -1086,6 +1123,9 @@ func cmdEngine(args []string) error {
 	defer cancel()
 	if args[0] == "status" {
 		return engine.Status(ctx, os.Stdout, *distro)
+	}
+	if args[0] == "relay" {
+		return engine.Relay(ctx, *distro)
 	}
 	res, err := engine.Install(ctx, engine.Options{Mode: *mode, Distro: *distro, Version: *ver, SHA256: *sum, NoKeepAlive: *noKeep, Out: os.Stdout})
 	if err != nil {

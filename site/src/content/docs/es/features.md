@@ -67,7 +67,7 @@ Las exposiciones pueden cerrarse solas después de un tiempo. Se listan en Públ
 
 ## Menú inicio
 
-En una máquina con escritorio (Linux o Windows), **Configuración → Acceso → Menú inicio** agrega al menú las apps web de sus propios contenedores. En Linux van en un submenú "Containers"; en Windows, en Inicio › Programas › Containers. Cada entrada abre `http://localhost:<puerto>` en el navegador predeterminado. Elige los contenedores uno a uno (también desde el menú de Accesos), o deja que ducktainer agregue todos los contenedores web. Las entradas siguen a los contenedores cuando se recrean.
+En una máquina con escritorio (Linux o Windows), **Configuración → Acceso → Menú inicio** agrega al menú las apps web de sus propios contenedores. En Linux van en un submenú "Containers"; en Windows, en Inicio › Programas › Containers. Cada entrada abre `http://localhost:<puerto>` en el navegador predeterminado. Elige los contenedores uno a uno (también desde el menú de Accesos), o deja que ducktainer agregue todos los contenedores web. Las entradas siguen a los contenedores cuando se recrean, y el menú se actualiza solo: en Linux, `ducktainer setup` instala para todos los usuarios una unidad de usuario de systemd que reconstruye el menú del escritorio (KDE no ve los cambios de otro modo).
 
 ## Auditoría
 

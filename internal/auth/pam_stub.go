@@ -1,4 +1,4 @@
-//go:build !(linux && cgo && pam)
+//go:build !(linux && cgo && pam) && !windows
 
 package auth
 

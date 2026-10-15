@@ -18,6 +18,7 @@ func TestSyncUserMenu(t *testing.T) {
 	t.Setenv("XDG_CONFIG_HOME", filepath.Join(tmp, "config"))
 	t.Setenv("DUCKTAINER_HOME", filepath.Join(tmp, "home"))
 	t.Setenv("DISPLAY", ":0")
+	refreshMenu = func(Info) {} // not this session's real menu
 	os.MkdirAll(filepath.Join(tmp, "home"), 0o700)
 	dir := filepath.Join(tmp, "data", "applications", "ducktainer-containers")
 

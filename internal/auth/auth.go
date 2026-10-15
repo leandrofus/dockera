@@ -1,11 +1,14 @@
 // Package auth authenticates users against the operating system (PAM on
-// Linux) and maps them to ducktainer roles through POSIX groups.
+// Linux, LogonUser on Windows) and maps them to ducktainer roles through
+// the system's groups.
 package auth
 
 import (
 	"ducktainer/internal/i18n"
 	"os/user"
+	"runtime"
 	"slices"
+	"strings"
 	"sync"
 	"time"
 )
@@ -20,6 +23,14 @@ var (
 	ErrUnavailable    = i18n.Errorf("system-user authentication is not available in this build")
 )
 
+// GroupInfo describes a system group and who is in it.
+type GroupInfo struct {
+	Name    string   `json:"name"`
+	Exists  bool     `json:"exists"`
+	GID     string   `json:"gid,omitempty"`
+	Members []string `json:"members"`
+}
+
 // Policy decides which system users may log in and with which role.
 type Policy struct {
 	AdminGroups  []string
@@ -30,9 +41,10 @@ type Policy struct {
 }
 
 // Groups returns the names of every group the user belongs to (primary
-// included), resolved through NSS so LDAP/SSSD users work too.
+// included), resolved through NSS so LDAP/SSSD users work too. On Windows
+// these are the local groups, including those joined through a domain group.
 func Groups(username string) ([]string, error) {
-	u, err := user.Lookup(username)
+	u, err := user.Lookup(normalize(username))
 	if err != nil {
 		return nil, err
 	}
@@ -54,7 +66,7 @@ func (p Policy) Role(username string) (string, error) {
 	if username == "root" && !p.AllowRoot {
 		return "", i18n.Errorf("root login is disabled (allow_root)")
 	}
-	if slices.Contains(p.AdminUsers, username) {
+	if inList(p.AdminUsers, username) {
 		return RoleAdmin, nil
 	}
 	groups, err := Groups(username)
@@ -62,19 +74,47 @@ func (p Policy) Role(username string) (string, error) {
 		return "", i18n.Errorf("could not resolve the groups of %s: %v", username, err)
 	}
 	for _, g := range groups {
-		if slices.Contains(p.AdminGroups, g) {
+		if inList(p.AdminGroups, g) {
 			return RoleAdmin, nil
 		}
 	}
-	if slices.Contains(p.ViewerUsers, username) {
+	if inList(p.ViewerUsers, username) {
 		return RoleViewer, nil
 	}
 	for _, g := range groups {
-		if slices.Contains(p.ViewerGroups, g) {
+		if inList(p.ViewerGroups, g) {
 			return RoleViewer, nil
 		}
 	}
 	return "", i18n.Errorf("%s is not a member of any authorized group", username)
+}
+
+// windowsNames: user and group names follow Windows rules.
+var windowsNames = runtime.GOOS == "windows"
+
+// normalize drops the `.\` (this computer) prefix Windows accepts.
+func normalize(name string) string {
+	if windowsNames {
+		return strings.TrimPrefix(name, `.\`)
+	}
+	return name
+}
+
+// inList reports whether a user or group name is in a policy list. Windows
+// names ignore case, and a bare entry ("bob") matches the account in any
+// domain (`CORP\bob`).
+func inList(list []string, name string) bool {
+	if !windowsNames {
+		return slices.Contains(list, name)
+	}
+	name = normalize(name)
+	_, bare, _ := strings.Cut(name, `\`)
+	for _, e := range list {
+		if strings.EqualFold(e, name) || bare != "" && !strings.ContainsAny(e, `\@`) && strings.EqualFold(e, bare) {
+			return true
+		}
+	}
+	return false
 }
 
 // Limiter slows down password guessing: after max failures for the same

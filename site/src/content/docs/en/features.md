@@ -67,7 +67,7 @@ Exposures can close themselves after a while. They are listed under Public in th
 
 ## Start menu
 
-On a machine with a desktop (Linux or Windows), **Settings → Access → Start menu** adds the web apps of its own containers to the menu. On Linux they go in a "Containers" submenu; on Windows, in Start › Programs › Containers. Each entry opens `http://localhost:<port>` in the default browser. Pick the containers one by one (also from the Jump menu), or let ducktainer add every web container. Entries follow the containers when they are recreated.
+On a machine with a desktop (Linux or Windows), **Settings → Access → Start menu** adds the web apps of its own containers to the menu. On Linux they go in a "Containers" submenu; on Windows, in Start › Programs › Containers. Each entry opens `http://localhost:<port>` in the default browser. Pick the containers one by one (also from the Jump menu), or let ducktainer add every web container. Entries follow the containers when they are recreated, and the menu refreshes on its own: on Linux, `ducktainer setup` installs a systemd user unit for every user that rebuilds the desktop's menu (KDE doesn't notice the changes otherwise).
 
 ## Audit log
 

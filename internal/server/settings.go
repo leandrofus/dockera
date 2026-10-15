@@ -11,6 +11,7 @@ import (
 	"net/url"
 	"os"
 	"os/user"
+	"runtime"
 	"strings"
 	"sync"
 	"time"
@@ -409,6 +410,7 @@ func (s *Server) accessInfo(w http.ResponseWriter, r *http.Request) {
 		"allow":         allow,
 		"allow_flags":   s.extraAllow(),
 		"service_user":  me,
+		"os":            runtime.GOOS,
 		"pam":           map[string]any{"enabled": a.PAM, "built": auth.Available, "mode": i18n.T(reqLang(r), auth.Mode())},
 		"token_login":   a.TokenLogin,
 		"allow_root":    a.AllowRoot,

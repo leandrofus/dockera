@@ -10,7 +10,7 @@ order: 6
 | `ducktainer ui` | Same as `serve`, and opens the browser |
 | `ducktainer agent` | Outbound agent (`--server`, `--name`, `--fingerprint`, `--socket`, `--install-service`; token in `DUCKTAINER_AGENT_TOKEN`) |
 | `ducktainer expose` | Publish only the Docker API, protected by allowlist, token and TLS (`--read-only`, `--no-exec`) |
-| `ducktainer engine install [--mode wsl\|native] \| status` | Windows: install Docker without Docker Desktop |
+| `ducktainer engine install [--mode wsl\|native] \| status \| relay` | Windows: install Docker without Docker Desktop |
 | `ducktainer setup [--dry-run]` | Adapt the service to the Docker installation |
 | `ducktainer auth show \| set … \| test <user>` | System-user sign-in and role mapping |
 | `ducktainer allow ls \| add \| rm` | Network allowlist |

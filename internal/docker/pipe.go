@@ -19,9 +19,13 @@ func PipePath(u *url.URL) string {
 }
 
 // wslDialer reaches the Docker daemon inside a WSL distribution through
-// `docker system dial-stdio`, the same way ssh endpoints work.
+// `docker system dial-stdio`, the same way ssh endpoints work, or through
+// the distribution's relay when one is running (see RelayPipe).
 func wslDialer(distro string) func(ctx context.Context) (net.Conn, error) {
 	return func(ctx context.Context) (net.Conn, error) {
+		if c, ok, err := dialRelay(ctx, distro); ok {
+			return c, err
+		}
 		cmd := exec.Command("wsl.exe", "-d", distro, "-u", "root", "--", "docker", "system", "dial-stdio")
 		hideWindow(cmd)
 		stdin, err := cmd.StdinPipe()

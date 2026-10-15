@@ -447,7 +447,7 @@ export function Settings({ ep, tab = 'hosts' }: { ep: string; tab?: string }) {
 }
 
 export function Login({ onDone }: { onDone: () => void }) {
-  const [info, setInfo] = useState<{ pam: boolean; token: boolean } | null>(null)
+  const [info, setInfo] = useState<{ pam: boolean; token: boolean; os?: string } | null>(null)
   const [mode, setMode] = useState<'user' | 'token'>('user')
   const [username, setUsername] = useState('')
   const [password, setPassword] = useState('')
@@ -488,7 +488,7 @@ export function Login({ onDone }: { onDone: () => void }) {
           </>
         ) : (
           <>
-            <p className="muted">{tr('Emergency access token:')} <code>sudo ducktainer token --rotate</code> {tr('on the server.')}</p>
+            <p className="muted">{tr('Emergency access token:')} <code>{info?.os === 'windows' ? 'ducktainer token --rotate' : 'sudo ducktainer token --rotate'}</code> {tr('on the server.')}</p>
             <input className="mono" type="password" autoFocus placeholder="token" value={token} onChange={(e) => setToken(e.target.value)} />
           </>
         )}

@@ -261,14 +261,20 @@ func installWSL(ctx context.Context, o Options) (Result, error) {
 	}
 
 	// WSL stops a distribution (and its containers) when no Windows process
-	// uses it: keep one running now and at every logon.
+	// uses it: keep one running now and at every logon. The relay does that
+	// and also lets the ducktainer service (LocalSystem, which can't use
+	// this user's WSL) reach the daemon.
 	if !o.NoKeepAlive {
-		keep := hidden(exec.Command("wsl.exe", "-d", name, "-u", "root", "--", "sleep", "infinity"))
+		self, err := os.Executable()
+		if err != nil {
+			return res, err
+		}
+		keep := hidden(exec.Command(self, "engine", "relay", "--distro", name))
 		if err := keep.Start(); err == nil {
 			keep.Process.Release()
 		}
 		task := "ducktainer WSL " + name
-		tr := fmt.Sprintf(`conhost.exe --headless wsl.exe -d %s -u root -- sleep infinity`, name)
+		tr := fmt.Sprintf(`conhost.exe --headless "%s" engine relay --distro %s`, self, name)
 		if _, err := run(ctx, nil, "", "schtasks.exe", "/Create", "/F", "/TN", task, "/SC", "ONLOGON", "/TR", tr); err != nil {
 			i18n.Fprintf(o.Out, "warning: could not create the logon task that keeps %s running (%v); containers stop when WSL shuts the distribution down\n", name, err)
 		}
