@@ -372,10 +372,27 @@ func (r *Runner) Command(ctx context.Context, project, dir string, files []strin
 	return cmd, cleanup, nil
 }
 
-// Stack runs `docker stack args...` (Swarm) on this machine against the
-// endpoint. vars (KEY=value) are added to the environment, which is what
-// `docker stack deploy` interpolates the compose file with.
-func (r *Runner) Stack(ctx context.Context, stdout, stderr io.Writer, dir string, vars []string, args ...string) error {
+// Stack runs `docker stack args...` (Swarm) against the endpoint: on the
+// node when its files live there, on this machine otherwise. The .env
+// variables are put in the environment, which is what `docker stack
+// deploy` interpolates the compose file with.
+func (r *Runner) Stack(ctx context.Context, stdout, stderr io.Writer, f *Files, args ...string) error {
+	dir, vars := os.TempDir(), []string(nil)
+	if f != nil {
+		dir, vars = f.Dir, ParseEnv(f.Env)
+	}
+	if f != nil && f.Node {
+		if r.Client == nil {
+			return i18n.Errorf("cannot run compose on %s", r.Endpoint.Name)
+		}
+		full := append([]string{"docker", "stack"}, args...)
+		fmt.Fprintf(stderr, "$ [%s] %s\n", r.Endpoint.Name, strings.Join(full, " "))
+		dirs := []string{}
+		for _, x := range f.Files {
+			dirs = append(dirs, path.Dir(x.Path))
+		}
+		return r.runOnNode(ctx, stdout, stderr, dir, dirs, full, vars...)
+	}
 	if _, err := exec.LookPath("docker"); err != nil {
 		return i18n.Errorf("the `docker` CLI is required on the machine running ducktainer")
 	}

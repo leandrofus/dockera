@@ -325,6 +325,9 @@ var es = map[string]string{
 	"wsl (Linux containers):      %s\n": "wsl (contenedores Linux):      %s\n",
 	"wsl: Linux containers in a WSL 2 distribution · native: Windows containers with dockerd.exe": "wsl: contenedores Linux en una distribución WSL 2 · native: contenedores Windows con dockerd.exe",
 	// swarm
+	"service %s has build: but no image: add one (e.g. image: %s) so the swarm nodes know which image to run": "el servicio %s tiene build: pero no image: agrega una (p. ej. image: %s) para que los nodos del swarm sepan qué imagen ejecutar",
+	"Nothing to build: no service has build:": "Nada que construir: ningún servicio tiene build:",
+	"The images were built only on this node and not pushed: tasks placed on other nodes (%d more) cannot run them (push them to a registry, or constrain the services to this node)": "Las imágenes se construyeron solo en este nodo y no se subieron: las tareas que caigan en otros nodos (%d más) no podrán ejecutarlas (súbelas a un registro o restringe los servicios a este nodo)",
 	"a name is required": "se requiere un nombre",
 	"ducktainer has no compose file for %s: paste it in the Compose tab to manage it from here": "ducktainer no tiene el compose de %s: pégalo en la pestaña Compose para gestionarlo desde aquí",
 	"invalid base64: %v":                                             "base64 inválido: %v",

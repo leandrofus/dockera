@@ -5,6 +5,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -820,6 +821,11 @@ type swarmStack struct {
 	Running  int            `json:"running"`
 	Desired  int            `json:"desired"`
 	Status   string         `json:"status"` // running | partial | stopped | empty
+	// Location: the compose file lives in a directory of its own (on the
+	// node for remote hosts) instead of ducktainer's store, so build
+	// contexts and relative paths resolve there.
+	Location *compose.Location `json:"location,omitempty"`
+	Node     bool              `json:"node,omitempty"`
 }
 
 func (s *Server) swarmStacks(ctx context.Context, c *docker.Client, ep string) (map[string]*swarmStack, error) {
@@ -858,7 +864,11 @@ func (s *Server) swarmStacks(ctx context.Context, c *docker.Client, ep string) (
 		st.Desired += sv.ServiceStatus.DesiredTasks
 	}
 	for _, n := range s.SwarmStacks.Managed(ep) {
-		get(n).Managed = true
+		st := get(n)
+		st.Managed = true
+		if loc := s.SwarmStacks.Location(ep, n); loc != nil {
+			st.Location, st.Node = loc, !c.Endpoint.Local()
+		}
 	}
 	for _, st := range out {
 		sort.Slice(st.Services, func(i, j int) bool { return st.Services[i].Name < st.Services[j].Name })
@@ -911,22 +921,35 @@ func (s *Server) swarmStack(r *http.Request) (*docker.Client, *swarmStack, error
 	return c, st, nil
 }
 
+// swarmFiles returns the compose file and .env of a stack ducktainer manages.
+func (s *Server) swarmFiles(ctx context.Context, c *docker.Client, ep string, st *swarmStack) (*compose.Files, error) {
+	switch {
+	case st.Location != nil:
+		return compose.ReadExternal(ctx, s.fsFor(c), st.Location.Dir, []string{st.Location.ComposePath()}, st.Location.EnvFile)
+	case st.Managed:
+		return s.SwarmStacks.Read(ep, st.Name)
+	}
+	return nil, badRequest("ducktainer has no compose file for %s: paste it in the Compose tab to manage it from here", st.Name)
+}
+
 func (s *Server) getSwarmStack(w http.ResponseWriter, r *http.Request) {
-	_, st, err := s.swarmStack(r)
+	c, st, err := s.swarmStack(r)
 	if err != nil {
 		writeErr(w, err)
 		return
 	}
 	resp := map[string]any{"stack": st}
 	if st.Managed {
-		if f, err := s.SwarmStacks.Read(r.PathValue("ep"), st.Name); err == nil {
+		if f, err := s.swarmFiles(r.Context(), c, r.PathValue("ep"), st); err == nil {
 			resp["files"] = f
+		} else {
+			resp["files_error"] = i18n.Render(err, reqLang(r))
 		}
 	}
 	writeJSON(w, resp)
 }
 
-// stackCLI runs `docker stack` for a stored stack, streaming its output.
+// stackCLI runs `docker stack` streaming its output.
 func (s *Server) stackCLI(ctx context.Context, st *stream, ep string, f *compose.Files, args ...string) error {
 	rn, err := s.runner(ep)
 	if err != nil {
@@ -934,11 +957,7 @@ func (s *Server) stackCLI(ctx context.Context, st *stream, ep string, f *compose
 	}
 	lw := &lineWriter{s: st}
 	defer lw.Flush()
-	dir, vars := "", []string(nil)
-	if f != nil {
-		dir, vars = f.Dir, compose.ParseEnv(f.Env)
-	}
-	if err := rn.Stack(ctx, lw, lw, dir, vars, args...); err != nil {
+	if err := rn.Stack(ctx, lw, lw, f, args...); err != nil {
 		lw.Flush()
 		if lw.last != "" && !strings.HasPrefix(lw.last, "$ ") {
 			return fmt.Errorf("%s (%w)", lw.last, err)
@@ -955,19 +974,103 @@ func (s *Server) checkSwarmStack(ctx context.Context, ep string, f *compose.File
 		return err
 	}
 	var errb bytes.Buffer
-	if err := rn.Stack(ctx, io.Discard, &errb, f.Dir, compose.ParseEnv(f.Env), "config", "-c", f.Files[0].Path); err != nil {
+	if err := rn.Stack(ctx, io.Discard, &errb, f, "config", "-c", f.Files[0].Path); err != nil {
 		lines := strings.Split(strings.TrimSpace(errb.String()), "\n")
 		return fmt.Errorf("%s (%w)", lines[len(lines)-1], err)
 	}
 	return nil
 }
 
-func deployArgs(name string, f *compose.Files, prune bool) []string {
+// swarmDeploy controls what happens around `docker stack deploy`.
+type swarmDeploy struct {
+	// Build runs `docker compose build` first (nil: when a service has build:).
+	Build *bool `json:"build"`
+	// Push sends the built images to their registry so every node can pull them.
+	Push  bool  `json:"push"`
+	Prune *bool `json:"prune"`
+}
+
+// builtServices lists the services with a build: section, which must also
+// name the image the swarm will run.
+func (s *Server) builtServices(ctx context.Context, ep, name string, f *compose.Files) ([]string, error) {
+	rn, err := s.runner(ep)
+	if err != nil {
+		return nil, err
+	}
+	out, err := rn.Output(ctx, name, f, "config", "--format", "json")
+	if err != nil {
+		return nil, err
+	}
+	var cfg struct {
+		Services map[string]struct {
+			Build json.RawMessage `json:"build"`
+			Image string          `json:"image"`
+		} `json:"services"`
+	}
+	if err := json.Unmarshal([]byte(out), &cfg); err != nil {
+		return nil, err
+	}
+	var list []string
+	for svc, x := range cfg.Services {
+		if len(x.Build) == 0 || string(x.Build) == "null" {
+			continue
+		}
+		if x.Image == "" {
+			return nil, missingImage{i18n.Errorf("service %s has build: but no image: add one (e.g. image: %s) so the swarm nodes know which image to run", svc, name+"-"+svc+":latest")}
+		}
+		list = append(list, svc)
+	}
+	sort.Strings(list)
+	return list, nil
+}
+
+// missingImage: a service builds an image but does not name it.
+type missingImage struct{ error }
+
+func (e missingImage) Unwrap() error         { return e.error }
+func (e missingImage) In(lang string) string { return i18n.Render(e.error, lang) }
+
+// deploySwarm builds (and pushes) the images when asked to, then runs
+// `docker stack deploy`.
+func (s *Server) deploySwarm(ctx context.Context, st *stream, ep, name string, f *compose.Files, opt swarmDeploy) error {
+	built := false
+	builds, err := s.builtServices(ctx, ep, name, f)
+	switch {
+	case err != nil && opt.Build != nil && *opt.Build:
+		return err
+	case errors.As(err, new(missingImage)):
+		return err // the swarm would have nothing to run
+	case err != nil:
+		builds = nil // compose could not read it; stack deploy reports the details
+	}
+	if opt.Build != nil && *opt.Build && len(builds) == 0 {
+		st.Log("Nothing to build: no service has build:")
+	}
+	if (opt.Build == nil || *opt.Build) && len(builds) > 0 {
+		c, err := s.Client(ep)
+		if err != nil {
+			return err
+		}
+		if err := s.compose(ctx, st, ep, name, f, append([]string{"build"}, builds...)...); err != nil {
+			return err
+		}
+		built = true
+		if opt.Push {
+			if err := s.compose(ctx, st, ep, name, f, append([]string{"push"}, builds...)...); err != nil {
+				return err
+			}
+		} else if info, err := swarmState(ctx, c); err == nil && info.Nodes > 1 {
+			st.Log("The images were built only on this node and not pushed: tasks placed on other nodes (%d more) cannot run them (push them to a registry, or constrain the services to this node)", info.Nodes-1)
+		}
+	}
 	args := []string{"deploy", "--with-registry-auth", "--detach=true", "-c", f.Files[0].Path}
-	if prune {
+	if built && !opt.Push {
+		args = append(args, "--resolve-image", "never") // the images only exist on this node
+	}
+	if opt.Prune == nil || *opt.Prune {
 		args = append(args, "--prune")
 	}
-	return append(args, name)
+	return s.stackCLI(ctx, st, ep, f, append(args, name)...)
 }
 
 type swarmStackReq struct {
@@ -975,7 +1078,11 @@ type swarmStackReq struct {
 	Compose string `json:"compose"`
 	Env     string `json:"env"`
 	Deploy  bool   `json:"deploy"`
-	Prune   *bool  `json:"prune"`
+	swarmDeploy
+	// Location keeps the stack in a directory (on the node for remote
+	// hosts); Existing uses the compose file already there.
+	Location *compose.Location `json:"location"`
+	Existing bool              `json:"existing"`
 }
 
 func (s *Server) createSwarmStack(w http.ResponseWriter, r *http.Request) {
@@ -994,26 +1101,39 @@ func (s *Server) createSwarmStack(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, herr(http.StatusConflict, "a stack with that name already exists"))
 		return
 	}
-	if _, err := s.SwarmStacks.Write(ep, req.Name, req.Compose, req.Env); err != nil {
-		writeErr(w, err)
-		return
+	if req.Location != nil && strings.TrimSpace(req.Location.Dir) == "" {
+		req.Location = nil
+	}
+	if req.Location == nil {
+		if _, err := s.SwarmStacks.Write(ep, req.Name, req.Compose, req.Env); err != nil {
+			writeErr(w, err)
+			return
+		}
 	}
 	st := newStream(w)
 	ctx := context.WithoutCancel(r.Context())
 	st.Close(func() error {
-		f, err := s.SwarmStacks.Read(ep, req.Name)
+		var f *compose.Files
+		var undo func()
+		var err error
+		if req.Location == nil {
+			f, err = s.SwarmStacks.Read(ep, req.Name)
+			undo = func() { s.SwarmStacks.Delete(ep, req.Name) }
+		} else {
+			f, undo, err = s.createInPlace(ctx, st, ep, stackReq{Name: req.Name, Compose: req.Compose, Env: req.Env, Location: req.Location, Existing: req.Existing}, s.SwarmStacks)
+		}
 		if err != nil {
 			return err
 		}
 		if err := s.checkSwarmStack(ctx, ep, f); err != nil {
-			s.SwarmStacks.Delete(ep, req.Name)
+			undo()
 			return i18n.Errorf("invalid compose, not saved: %v", err)
 		}
 		st.Log("Stack saved")
 		if !req.Deploy {
 			return nil
 		}
-		return s.stackCLI(ctx, st, ep, f, deployArgs(req.Name, f, true)...)
+		return s.deploySwarm(ctx, st, ep, req.Name, f, req.swarmDeploy)
 	}())
 }
 
@@ -1024,27 +1144,49 @@ func (s *Server) updateSwarmStack(w http.ResponseWriter, r *http.Request) {
 		writeErr(w, err)
 		return
 	}
-	if err := compose.ValidName(name); err != nil {
-		writeErr(w, badRequest(err.Error()))
-		return
-	}
-	// saving a stack deployed elsewhere adopts it
-	prev, _ := s.SwarmStacks.Read(ep, name)
-	if _, err := s.SwarmStacks.Write(ep, name, req.Compose, req.Env); err != nil {
+	c, info, err := s.swarmStack(r)
+	if err != nil {
 		writeErr(w, err)
 		return
 	}
-	restore := func() {
-		if prev != nil {
-			s.SwarmStacks.Write(ep, name, prev.Files[0].Content, prev.Env)
-		} else {
-			s.SwarmStacks.Delete(ep, name)
+	var restore func()
+	if info.Location != nil {
+		prev, err := s.swarmFiles(r.Context(), c, ep, info)
+		if err != nil {
+			writeErr(w, err)
+			return
 		}
+		fsys := s.fsFor(c)
+		if err := compose.WriteExternal(r.Context(), fsys, prev, map[string]string{prev.Files[0].Path: req.Compose}, req.Env); err != nil {
+			writeErr(w, err)
+			return
+		}
+		cur, _ := s.swarmFiles(r.Context(), c, ep, info)
+		restore = func() {
+			if cur != nil {
+				compose.WriteExternal(context.Background(), fsys, cur, map[string]string{prev.Files[0].Path: prev.Files[0].Content}, prev.Env)
+			}
+		}
+	} else {
+		// saving a stack deployed elsewhere adopts it into the store
+		prev, _ := s.SwarmStacks.Read(ep, name)
+		if _, err := s.SwarmStacks.Write(ep, name, req.Compose, req.Env); err != nil {
+			writeErr(w, err)
+			return
+		}
+		restore = func() {
+			if prev != nil {
+				s.SwarmStacks.Write(ep, name, prev.Files[0].Content, prev.Env)
+			} else {
+				s.SwarmStacks.Delete(ep, name)
+			}
+		}
+		info.Managed = true
 	}
 	st := newStream(w)
 	ctx := context.WithoutCancel(r.Context())
 	st.Close(func() error {
-		f, err := s.SwarmStacks.Read(ep, name)
+		f, err := s.swarmFiles(ctx, c, ep, info)
 		if err != nil {
 			return err
 		}
@@ -1056,19 +1198,91 @@ func (s *Server) updateSwarmStack(w http.ResponseWriter, r *http.Request) {
 		if !req.Deploy {
 			return nil
 		}
-		return s.stackCLI(ctx, st, ep, f, deployArgs(name, f, req.Prune == nil || *req.Prune)...)
+		return s.deploySwarm(ctx, st, ep, name, f, req.swarmDeploy)
 	}())
 }
 
 func (s *Server) deploySwarmStack(w http.ResponseWriter, r *http.Request) {
 	ep, name := r.PathValue("ep"), r.PathValue("name")
-	f, err := s.SwarmStacks.Read(ep, name)
+	var opt swarmDeploy
+	if r.ContentLength != 0 {
+		if err := readJSON(r, &opt); err != nil {
+			writeErr(w, err)
+			return
+		}
+	}
+	c, info, err := s.swarmStack(r)
 	if err != nil {
-		writeErr(w, badRequest("ducktainer has no compose file for %s: paste it in the Compose tab to manage it from here", name))
+		writeErr(w, err)
+		return
+	}
+	f, err := s.swarmFiles(r.Context(), c, ep, info)
+	if err != nil {
+		writeErr(w, err)
 		return
 	}
 	st := newStream(w)
-	st.Close(s.stackCLI(context.WithoutCancel(r.Context()), st, ep, f, deployArgs(name, f, true)...))
+	st.Close(s.deploySwarm(context.WithoutCancel(r.Context()), st, ep, name, f, opt))
+}
+
+// swarmStackLocation moves a stored stack to a directory of its own, or
+// points a stack (also one deployed elsewhere) at a directory that already
+// holds its compose file.
+func (s *Server) swarmStackLocation(w http.ResponseWriter, r *http.Request) {
+	ep, name := r.PathValue("ep"), r.PathValue("name")
+	var loc compose.Location
+	if err := readJSON(r, &loc); err != nil {
+		writeErr(w, err)
+		return
+	}
+	if err := loc.Validate(); err != nil {
+		writeErr(w, badRequest(err.Error()))
+		return
+	}
+	c, info, err := s.swarmStack(r)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	ctx := r.Context()
+	fsys := s.fsFor(c)
+	found, err := compose.FindCompose(ctx, fsys, loc.Dir)
+	if err != nil {
+		writeErr(w, err)
+		return
+	}
+	if info.Managed && info.Location == nil {
+		if found != "" {
+			writeErr(w, herr(http.StatusConflict, "%s already has a compose file (%s): use the existing files or pick another directory", loc.Dir, found))
+			return
+		}
+		f, err := s.SwarmStacks.Read(ep, name)
+		if err != nil {
+			writeErr(w, err)
+			return
+		}
+		if err := fsys.WriteFile(ctx, loc.ComposePath(), []byte(f.Files[0].Content), 0o644); err != nil {
+			writeErr(w, err)
+			return
+		}
+		if strings.TrimSpace(f.Env) != "" {
+			if err := fsys.WriteFile(ctx, loc.EnvPath(), []byte(f.Env), 0o600); err != nil {
+				writeErr(w, err)
+				return
+			}
+		}
+	} else {
+		if found == "" {
+			writeErr(w, badRequest("there is no compose file in %s", loc.Dir))
+			return
+		}
+		loc.File = found
+	}
+	if err := s.SwarmStacks.SetLocation(ep, name, loc); err != nil {
+		writeErr(w, err)
+		return
+	}
+	writeJSON(w, map[string]any{"ok": true, "location": loc})
 }
 
 func (s *Server) removeSwarmStack(w http.ResponseWriter, r *http.Request) {
@@ -1089,7 +1303,11 @@ func (s *Server) removeSwarmStack(w http.ResponseWriter, r *http.Request) {
 			if err := s.SwarmStacks.Delete(ep, name); err != nil {
 				return err
 			}
-			st.Log("Stack files removed")
+			if info.Location != nil {
+				st.Log("ducktainer no longer tracks the stack; its files in %s were kept", info.Location.Dir)
+			} else {
+				st.Log("Stack files removed")
+			}
 		}
 		return nil
 	}())

@@ -386,7 +386,7 @@ func EnsureImage(ctx context.Context, c *docker.Client, image string, auth func(
 // with the daemon socket and the project directories mounted at the same
 // paths, so relative volumes, env_file, build contexts and .env resolve on
 // the node exactly as if compose were run there.
-func (r *Runner) runOnNode(ctx context.Context, stdout, stderr io.Writer, dir string, dirs []string, cmd []string) error {
+func (r *Runner) runOnNode(ctx context.Context, stdout, stderr io.Writer, dir string, dirs []string, cmd []string, vars ...string) error {
 	c := r.Client
 	image := composeImage(r.Endpoint)
 	if err := EnsureImage(ctx, c, image, r.Auth, stderr); err != nil {
@@ -406,7 +406,7 @@ func (r *Runner) runOnNode(ctx context.Context, stdout, stderr io.Writer, dir st
 		"Image":      image,
 		"Entrypoint": cmd,
 		"WorkingDir": dir,
-		"Env":        []string{"DOCKER_HOST=unix:///var/run/docker.sock", "DOCKER_CONFIG=/ducktainer-config"},
+		"Env":        append(vars, "DOCKER_HOST=unix:///var/run/docker.sock", "DOCKER_CONFIG=/ducktainer-config"),
 		"Labels":     map[string]string{helperLabel: "compose"},
 		"HostConfig": map[string]any{
 			"Binds":       binds,

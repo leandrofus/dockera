@@ -367,4 +367,6 @@ export interface SwarmStack {
   running: number
   desired: number
   status: 'running' | 'partial' | 'stopped' | 'empty'
+  location?: StackLocation
+  node?: boolean
 }

@@ -175,7 +175,7 @@ ducktainer controla la API de Docker de cada host, lo que equivale a root en ell
 - **Modo Swarm**: si un host forma parte de un swarm, aparece un grupo Swarm en la barra lateral:
   - **Clúster**: inicializar un swarm o unirse a uno, comandos de unión para workers y managers (con renovación de tokens), salir del swarm;
   - **Servicios**: crear (imagen, réplicas o global, puertos, entorno, redes overlay, secrets, configs, restricciones, límites), escalar, reiniciar, actualizar la imagen, revertir, editar la especificación completa, tareas por nodo y logs en vivo;
-  - **Stacks swarm** desplegados con `docker stack deploy` a partir de un compose y su `.env` (los mismos editores que los stacks compose); los desplegados por fuera se listan y se pueden adoptar pegando su compose. Las plantillas Swarm del marketplace se despliegan aquí;
+  - **Stacks swarm** desplegados con `docker stack deploy` a partir de un compose y su `.env` (los mismos editores que los stacks compose). Como los stacks compose, viven en el almacén de ducktainer o en un directorio propio, también en nodos remotos; los servicios con `build:` (y un `image:` que nombre el resultado) se construyen ahí antes de desplegar y, opcionalmente, se suben a su registro para que todos los nodos puedan descargarlos. Los desplegados por fuera se listan y se pueden adoptar pegando su compose o indicando su directorio. Las plantillas Swarm del marketplace se despliegan aquí;
   - **Nodos**: disponibilidad (activo, pausa, drenar), promover/degradar, labels, tareas por nodo, quitar;
   - **Secrets y configs**: crear desde texto o un archivo, ver qué servicios los usan.
   En un worker solo se ve la página del clúster: el swarm se gestiona desde un host manager.

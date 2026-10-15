@@ -715,10 +715,12 @@ export function swarmObjectActions(ep: string, kind: 'secrets' | 'configs', o: S
   ]
 }
 
-export function swarmStackDeploy(ep: string, name: string) {
-  return runJob(`${name}: deploy`, 'POST', `/e/${enc(ep)}/swarm/stacks/${enc(name)}/deploy`)
+/** docker stack deploy; images with build: are built first (pushed if the stack is set to). */
+export function swarmStackDeploy(ep: string, name: string, opts: { build?: boolean; push?: boolean } = {}) {
+  const push = opts.push ?? getPref(`swarm.push.${ep}.${name}`, false)
+  return runJob(`${name}: deploy`, 'POST', `/e/${enc(ep)}/swarm/stacks/${enc(name)}/deploy`, { build: opts.build, push })
     .catch((e) => toast.err(e))
-    .finally(() => invalidate('/swarm', '/services'))
+    .finally(() => invalidate('/swarm', '/services', '/images'))
 }
 
 export function swarmStackActions(ep: string, st: SwarmStack): MenuEntry[] {
@@ -730,11 +732,19 @@ export function swarmStackActions(ep: string, st: SwarmStack): MenuEntry[] {
     { label: tr('Combined logs'), icon: <ScrollText size={I} />, disabled: st.services.length === 0, onClick: () => go(ep, 'swarm-stacks', st.name, 'logs') },
     'sep',
     { label: tr('Deploy (stack deploy)'), icon: <Rocket size={I} />, disabled: !st.managed, hint: noFiles, onClick: () => swarmStackDeploy(ep, st.name) },
+    { label: tr('Build, push and deploy'), icon: <Upload size={I} />, disabled: !st.managed, hint: noFiles, onClick: () => swarmStackDeploy(ep, st.name, { build: true, push: true }) },
+    { label: tr('Deploy without building'), icon: <Rocket size={I} />, disabled: !st.managed, hint: noFiles, onClick: () => swarmStackDeploy(ep, st.name, { build: false }) },
     {
       label: tr('Services'),
       icon: <Boxes size={I} />,
       disabled: st.services.length === 0,
       submenu: st.services.map((sv) => ({ label: sv.name, hint: `${sv.running}/${sv.desired}`, onClick: () => go(ep, 'services', sv.id) })),
+    },
+    {
+      label: st.location ? tr('Change location…') : st.managed ? tr('Move to a directory…') : tr('Use the compose file in a directory…'),
+      icon: <FolderOpen size={I} />,
+      hint: st.location?.dir,
+      onClick: () => openDialog((close) => <LocationDialog ep={ep} swarm stack={{ name: st.name, location: st.location, total: st.running, managed: st.managed }} onClose={close} />),
     },
     'sep',
     {

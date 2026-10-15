@@ -331,7 +331,7 @@ func (s *Server) createStack(w http.ResponseWriter, r *http.Request) {
 			f, err = s.Stacks.Read(ep, req.Name)
 			undo = func() { s.Stacks.Delete(ep, req.Name) }
 		} else {
-			f, undo, err = s.createInPlace(ctx, st, ep, req)
+			f, undo, err = s.createInPlace(ctx, st, ep, req, s.Stacks)
 		}
 		if err != nil {
 			return err
@@ -354,7 +354,7 @@ func (s *Server) createStack(w http.ResponseWriter, r *http.Request) {
 
 // createInPlace writes a new stack into its own directory (or registers
 // the compose file already there) and returns how to undo it.
-func (s *Server) createInPlace(ctx context.Context, st *stream, ep string, req stackReq) (*compose.Files, func(), error) {
+func (s *Server) createInPlace(ctx context.Context, st *stream, ep string, req stackReq, store *compose.Store) (*compose.Files, func(), error) {
 	loc := *req.Location
 	if err := loc.Validate(); err != nil {
 		return nil, nil, err
@@ -393,14 +393,14 @@ func (s *Server) createInPlace(ctx context.Context, st *stream, ep string, req s
 		}
 		st.Log("Files written to %s", loc.Dir)
 	}
-	if err := s.Stacks.SetLocation(ep, req.Name, loc); err != nil {
+	if err := store.SetLocation(ep, req.Name, loc); err != nil {
 		return nil, nil, err
 	}
 	undo := func() {
 		for _, p := range created {
 			fsys.Remove(ctx, p)
 		}
-		s.Stacks.Delete(ep, req.Name)
+		store.Delete(ep, req.Name)
 	}
 	f, err := compose.ReadExternal(ctx, fsys, loc.Dir, []string{loc.ComposePath()}, loc.EnvFile)
 	if err != nil {

@@ -166,17 +166,17 @@ export function NewStackDialog({ ep, onClose, initial }: { ep: string; onClose: 
 }
 
 /** Moves a store stack to its own directory or repoints a located one. */
-export function LocationDialog({ ep, stack, onClose }: { ep: string; stack: Stack; onClose: () => void }) {
+export function LocationDialog({ ep, stack, onClose, swarm }: { ep: string; stack: Pick<Stack, 'name' | 'location' | 'total'> & { managed?: boolean }; onClose: () => void; swarm?: boolean }) {
   const remote = useRemote(ep)
   const [loc, setLoc] = useState<StackLocation>({ dir: stack.location?.dir ?? '', env_file: stack.location?.env_file ?? '' })
   const [busy, setBusy] = useState(false)
-  const stored = !stack.location
+  const stored = !stack.location && stack.managed !== false
   const save = async () => {
     setBusy(true)
     try {
-      await api.put(`/e/${enc(ep)}/stacks/${enc(stack.name)}/location`, { dir: loc.dir || `/opt/${stack.name}`, env_file: loc.env_file })
+      await api.put(`/e/${enc(ep)}${swarm ? '/swarm' : ''}/stacks/${enc(stack.name)}/location`, { dir: loc.dir || `/opt/${stack.name}`, env_file: loc.env_file })
       toast.ok(tr('Location of {0} updated', stack.name))
-      invalidate('/stacks')
+      invalidate(swarm ? '/swarm' : '/stacks')
       onClose()
     } catch (e) {
       toast.err(e)

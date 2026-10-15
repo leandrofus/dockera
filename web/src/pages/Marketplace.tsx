@@ -127,7 +127,7 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
       } else {
         const envText = Object.entries(env).map(([k, v]) => `${k}=${v}`).join('\n')
         if (toSwarm) {
-          await runJob(tr('Deploy {0}', t.title), 'POST', `/e/${enc(ep)}/swarm/stacks`, { name, compose, env: envText, deploy: true })
+          await runJob(tr('Deploy {0}', t.title), 'POST', `/e/${enc(ep)}/swarm/stacks`, { name, compose, env: envText, deploy: true, ...placementBody({ ...place, existing: false }, name) })
           onClose()
           invalidate('/swarm', '/services')
           go(ep, 'swarm-stacks', name)
@@ -189,7 +189,7 @@ function DeployDialog({ ep, t, onClose }: { ep: string; t: Template; onClose: ()
         <span>{t.type === 1 ? tr('Container name') : tr('Stack name')}</span>
         <input value={name} onChange={(e) => setName(t.type === 1 ? e.target.value : slug(e.target.value))} />
       </label>
-      {t.type !== 1 && !toSwarm && (
+      {t.type !== 1 && (
         <div className="field">
           <span>{tr('Location')}</span>
           <PlacementFields name={name} value={place} onChange={setPlace} remote={remote} />

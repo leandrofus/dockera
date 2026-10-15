@@ -2,7 +2,7 @@ import { t as tr, tc } from '../i18n'
 import { useEffect, useMemo, useState } from 'react'
 import {
   Boxes, Server, KeyRound, FileText, Layers, Plus, Search, ChevronRight, Rocket, Save, Undo2, Eye, EyeOff, RefreshCw, Copy as CopyIcon,
-  LogOut, Scaling, RotateCw, ArrowUpCircle, Trash2, LayoutGrid, LayoutList, Crown, Tags,
+  LogOut, Scaling, FolderInput, RotateCw, ArrowUpCircle, Trash2, LayoutGrid, LayoutList, Crown, Tags,
 } from 'lucide-react'
 import { api, enc } from '../lib/api'
 import type { Network, Service, ServiceSpec, SwarmInfo, SwarmNode, SwarmObject, SwarmStack, Task } from '../lib/types'
@@ -21,6 +21,7 @@ import {
 } from '../actions'
 import { LogViewer } from '../components/LogViewer'
 import { ComposeVisual } from '../components/ComposeVisual'
+import { LocationDialog, PlacementFields, placementBody, usePlacement } from './Stacks'
 import { JsonView } from './ContainerRecord'
 
 /** The endpoint's swarm state: whether it is a manager we can manage from. */
@@ -875,6 +876,17 @@ export function SwarmObjectRecord({ ep, kind, id }: { ep: string; kind: 'secrets
 
 // ---------- stacks (docker stack deploy) ----------
 
+/** The compose builds images (build: under a service). */
+export const hasBuild = (text: string) => /^\s+build:/m.test(text)
+
+function PushCheck({ value, onChange }: { value: boolean; onChange: (v: boolean) => void }) {
+  return (
+    <label className="check" title={tr('After building, push the images to their registry so every node of the swarm can pull them. Without it they only exist on the node that built them.')}>
+      <input type="checkbox" checked={value} onChange={(e) => onChange(e.target.checked)} /> {tr('push built images')}
+    </label>
+  )
+}
+
 const SWARM_SAMPLE = `services:
   web:
     image: nginx:alpine
@@ -894,10 +906,13 @@ export function NewSwarmStackDialog({ ep, onClose, initial }: { ep: string; onCl
   const [deploy, setDeploy] = useState(true)
   const [mode, setMode] = usePref<'yaml' | 'visual'>('compose.mode', 'visual')
   const [busy, setBusy] = useState(false)
+  const [place, setPlace, remote] = usePlacement(ep)
+  const [push, setPush] = useState(false)
+  const existing = place.mode === 'dir' && place.existing
   const submit = async () => {
     setBusy(true)
     try {
-      await runJob(tr('Create stack {0}', name), 'POST', `/e/${enc(ep)}/swarm/stacks`, { name, compose, env, deploy })
+      await runJob(tr('Create stack {0}', name), 'POST', `/e/${enc(ep)}/swarm/stacks`, { name, compose: existing ? '' : compose, env: existing ? '' : env, deploy, push, ...placementBody(place, name) })
       onClose()
       invalidate('/swarm', '/services')
       go(ep, 'swarm-stacks', name)
@@ -916,9 +931,10 @@ export function NewSwarmStackDialog({ ep, onClose, initial }: { ep: string; onCl
       footer={
         <>
           <label className="check"><input type="checkbox" checked={deploy} onChange={(e) => setDeploy(e.target.checked)} /> {tr('Deploy now (stack deploy)')}</label>
+          {deploy && (existing || hasBuild(compose)) && <PushCheck value={push} onChange={setPush} />}
           <span className="grow" />
           <button className="btn" onClick={onClose}>{tr('Cancel')}</button>
-          <button className="btn btn-primary" disabled={busy || !name || !compose.trim()} onClick={submit}><Rocket size={14} /> {tr('Create stack')}</button>
+          <button className="btn btn-primary" disabled={busy || !name || (!existing && !compose.trim())} onClick={submit}><Rocket size={14} /> {tr('Create stack')}</button>
         </>
       }
     >
@@ -927,8 +943,12 @@ export function NewSwarmStackDialog({ ep, onClose, initial }: { ep: string; onCl
         <span>{tr('Stack name')}</span>
         <input value={name} placeholder="mi-stack" onChange={(e) => setName(e.target.value.toLowerCase().replace(/[^a-z0-9_-]/g, '-'))} autoFocus />
       </label>
-      <p className="help">{tr('Deployed with docker stack deploy: use the deploy: key for replicas, placement and update policy. build: is ignored (images must be in a registry the nodes can pull from); file-based secrets and configs need files next to the compose, so prefer external: true ones created in Secrets/Configs. Variables come from the .env.')}</p>
-      <div className={mode === 'visual' ? 'stack-new-visual' : 'grid-editor'}>
+      <div className="field">
+        <span>{tr('Location')}</span>
+        <PlacementFields name={name} value={place} onChange={setPlace} remote={remote} allowExisting />
+      </div>
+      <p className="help">{tr('Deployed with docker stack deploy: use the deploy: key for replicas, placement and update policy. Services with build: are built in the stack directory before deploying (they need image: to name the result); file-based secrets and configs resolve there too. Variables come from the .env.')}</p>
+      {!existing && <div className={mode === 'visual' ? 'stack-new-visual' : 'grid-editor'}>
         <div>
           <div className="label row gap">
             compose.yaml <span className="grow" />
@@ -943,7 +963,7 @@ export function NewSwarmStackDialog({ ep, onClose, initial }: { ep: string; onCl
           <div className="label">.env</div>
           <CodeEditor value={env} onChange={setEnv} minRows={22} placeholder={tr('VARIABLE=value')} />
         </div>
-      </div>
+      </div>}
     </Modal>
   )
 }
@@ -1031,12 +1051,13 @@ export function SwarmStacks({ ep }: { ep: string }) {
   )
 }
 
-function SwarmComposeEditor({ ep, stack, files }: { ep: string; stack: SwarmStack; files?: { files: { content: string }[]; env: string } }) {
+function SwarmComposeEditor({ ep, stack, files }: { ep: string; stack: SwarmStack; files?: { files: { content: string; path: string }[]; env: string; env_path?: string; dir?: string } }) {
   const orig = files?.files[0]?.content ?? ''
   const [text, setText] = useState(orig)
   const [env, setEnv] = useState(files?.env ?? '')
   const [active, setActive] = useState('compose')
   const [prune, setPrune] = useState(true)
+  const [push, setPush] = usePref(`swarm.push.${ep}.${stack.name}`, false)
   const [busy, setBusy] = useState(false)
   const [mode, setMode] = usePref<'yaml' | 'visual'>('compose.mode', 'visual')
   useEffect(() => setText(orig), [orig])
@@ -1045,7 +1066,7 @@ function SwarmComposeEditor({ ep, stack, files }: { ep: string; stack: SwarmStac
   const save = async (deploy: boolean) => {
     setBusy(true)
     try {
-      await runJob(`${deploy ? tr('Save and deploy') : tr('Save')} ${stack.name}`, 'PUT', `/e/${enc(ep)}/swarm/stacks/${enc(stack.name)}`, { compose: text, env, deploy, prune })
+      await runJob(`${deploy ? tr('Save and deploy') : tr('Save')} ${stack.name}`, 'PUT', `/e/${enc(ep)}/swarm/stacks/${enc(stack.name)}`, { compose: text, env, deploy, prune, push })
       invalidate('/swarm', '/services')
     } catch (e) {
       toast.err(e)
@@ -1055,7 +1076,13 @@ function SwarmComposeEditor({ ep, stack, files }: { ep: string; stack: SwarmStac
   }
   return (
     <div className="compose-editor">
-      {!stack.managed && <div className="alert">{tr('This stack was deployed outside ducktainer and Docker does not keep its compose file. Paste it here and save to manage the stack from ducktainer.')}</div>}
+      {!stack.managed && (
+        <div className="alert">
+          {tr('This stack was deployed outside ducktainer and Docker does not keep its compose file. Paste it here and save to manage the stack from ducktainer.')}{' '}
+          <button className="btn btn-sm" onClick={() => openDialog((close) => <LocationDialog ep={ep} swarm stack={{ name: stack.name, total: stack.running, managed: false }} onClose={close} />)}><FolderInput size={14} /> {tr('Use the compose file in a directory…')}</button>
+        </div>
+      )}
+      {stack.location && files?.dir && <div className="alert">{stack.node ? tr('Editing on the node:') : tr('Editing in place:')} <code>{files.dir}</code></div>}
       <div className="file-tabs-row">
         <Tabs active={active} onChange={setActive} tabs={[
           { id: 'compose', label: <>compose.yaml{text !== orig && <span className="dirty-dot" />}</> },
@@ -1075,6 +1102,7 @@ function SwarmComposeEditor({ ep, stack, files }: { ep: string; stack: SwarmStac
       <div className={`savebar${dirty ? ' dirty' : ''}`}>
         <span>{dirty ? tr('Unsaved changes') : tr('No changes')}</span>
         <label className="check" title={tr('Remove services that are no longer in the compose file')}><input type="checkbox" checked={prune} onChange={(e) => setPrune(e.target.checked)} /> --prune</label>
+        {hasBuild(text) && <PushCheck value={push} onChange={setPush} />}
         <span className="grow" />
         <button className="btn" disabled={!dirty || busy} onClick={() => (setText(orig), setEnv(files?.env ?? ''))}><Undo2 size={14} /> {tr('Discard')}</button>
         <button className="btn" disabled={!dirty || busy || !text.trim()} onClick={() => save(false)}><Save size={14} /> {tr('Save')}</button>
@@ -1085,7 +1113,7 @@ function SwarmComposeEditor({ ep, stack, files }: { ep: string; stack: SwarmStac
 }
 
 export function SwarmStackRecord({ ep, name, tab = 'services' }: { ep: string; name: string; tab?: string }) {
-  const { data, error } = useResource<{ stack: SwarmStack; files?: { files: { content: string; path: string }[]; env: string } }>(`/e/${enc(ep)}/swarm/stacks/${enc(name)}`, { poll: 8000 })
+  const { data, error } = useResource<{ stack: SwarmStack; files?: { files: { content: string; path: string }[]; env: string; env_path?: string; dir?: string }; files_error?: string }>(`/e/${enc(ep)}/swarm/stacks/${enc(name)}`, { poll: 8000 })
   const { data: services } = useResource<Service[]>(`/e/${enc(ep)}/services`)
   const menu = useMenu()
   if (error) return <div className="page"><Empty icon={<Layers size={28} />} title={tr('Stack not found')}>{error.message}</Empty></div>
@@ -1108,7 +1136,7 @@ export function SwarmStackRecord({ ep, name, tab = 'services' }: { ep: string; n
           </div>
         </div>
         <div className="record-actions needs-admin">
-          <button className="btn btn-primary" disabled={!s.managed} title={s.managed ? undefined : tr('no files')} onClick={() => swarmStackDeploy(ep, s.name)}><Rocket size={14} /> {tr('Deploy')}</button>
+          <button className="btn btn-primary" disabled={!s.managed} title={s.managed ? (data.files && hasBuild(data.files.files[0]?.content ?? '') ? tr('Builds the images, then docker stack deploy') : undefined) : tr('no files')} onClick={() => swarmStackDeploy(ep, s.name)}><Rocket size={14} /> {tr('Deploy')}</button>
           <MenuButton items={() => swarmStackActions(ep, s)} className="btn" />
         </div>
       </header>
@@ -1118,7 +1146,9 @@ export function SwarmStackRecord({ ep, name, tab = 'services' }: { ep: string; n
             <Props items={[
               ['Stack', s.name],
               [tr('Origin'), s.managed ? tr('Created with ducktainer') : tr('External (docker stack deploy)')],
+              s.managed && [tr('Location'), s.location ? (s.node ? tr('Directory on the node') : tr('Own directory')) : tr('ducktainer store'), () => [{ label: s.location ? tr('Change location…') : tr('Move to a directory…'), onClick: () => openDialog((close) => <LocationDialog ep={ep} swarm stack={{ name: s.name, location: s.location, total: s.running }} onClose={close} />) }]],
               data.files && [tr('Files'), <span className="mono small">{data.files.files[0]?.path}</span>, () => [{ label: tr('Copy path'), onClick: () => copy(data.files!.files[0].path) }]],
+              data.files_error && [tr('Files'), <span className="text-bad small">{data.files_error}</span>],
             ]} />
           </Section>
           <Section title={tr('Services · {0}', s.services.length)}>

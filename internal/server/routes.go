@@ -121,6 +121,7 @@ func (s *Server) routes(mux *http.ServeMux) {
 	e("PUT /swarm/stacks/{name}", s.updateSwarmStack)
 	e("DELETE /swarm/stacks/{name}", s.removeSwarmStack)
 	e("POST /swarm/stacks/{name}/deploy", s.deploySwarmStack)
+	e("PUT /swarm/stacks/{name}/location", s.swarmStackLocation)
 	e("GET /swarm/stacks/{name}/logs", s.swarmStackLogs)
 
 	e("GET /nodes", s.listNodes)
