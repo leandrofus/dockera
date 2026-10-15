@@ -5,12 +5,13 @@ import {
   Play, Square, RotateCw, Pause, Zap, Terminal, ScrollText, FolderOpen, Pencil, Copy, Trash2, Star, ExternalLink,
   Network as NetIcon, Layers, Box, HardDrive, Download, Upload, Tag as TagIcon, Image as ImageIcon, Eye, FileCode2,
   PackagePlus, Unplug, PlugZap, RefreshCw, Activity, Save, ArrowUpCircle, ClipboardCopy, Rocket,
+  Server, Boxes, KeyRound, FileText, Scaling, Undo2, ShieldCheck, ArrowDownCircle, Tags, ListChecks,
 } from 'lucide-react'
 import { api, enc } from './lib/api'
 import { cname, copy, imageRepo, shortId, stackOf, uniquePorts } from './lib/format'
 import { go } from './lib/router'
 import { invalidate, peek } from './lib/store'
-import type { Container, Image, Network, Stack, Volume } from './lib/types'
+import type { Container, Image, Network, Service, Stack, SwarmNode, SwarmObject, SwarmStack, Volume } from './lib/types'
 import type { MenuEntry } from './ui/ContextMenu'
 import { confirm, openDialog, prompt, runJob, toast } from './ui/overlays'
 import { ContainerFormDialog } from './components/ContainerForm'
@@ -26,12 +27,12 @@ async function act(p: Promise<any>, ok?: string) {
   } catch (e) {
     toast.err(e)
   } finally {
-    invalidate('/containers', '/stacks', '/networks', '/volumes', '/images', '/info')
+    invalidate('/containers', '/stacks', '/networks', '/volumes', '/images', '/info', '/services', '/nodes', '/secrets', '/configs', '/swarm')
   }
 }
 
 // ---------- favorites ----------
-export type FavKind = 'container' | 'stack' | 'image' | 'network' | 'volume'
+export type FavKind = 'container' | 'stack' | 'image' | 'network' | 'volume' | 'service' | 'node'
 export interface Fav {
   ep: string
   kind: FavKind
@@ -200,7 +201,9 @@ export function containerActions(ep: string, c: Container, opts: { preview?: () 
       ],
     },
     'sep',
-    { label: stack ? tr('Go to stack {0}', stack) : tr('Go to stack'), icon: <Layers size={I} />, disabled: !stack, hint: stack ? undefined : 'suelto', onClick: () => go(ep, 'stacks', stack) },
+    c.Labels?.['com.docker.swarm.service.id']
+      ? { label: tr('Go to service {0}', c.Labels['com.docker.swarm.service.name']), icon: <Boxes size={I} />, onClick: () => go(ep, 'services', c.Labels['com.docker.swarm.service.id']) }
+      : { label: stack ? tr('Go to stack {0}', stack) : tr('Go to stack'), icon: <Layers size={I} />, disabled: !stack, hint: stack ? undefined : 'suelto', onClick: () => go(ep, 'stacks', stack) },
     { label: tr('Go to image'), icon: <ImageIcon size={I} />, onClick: () => go(ep, 'images', c.ImageID) },
     toggleFav(ep, 'container', name, name),
     'sep',
@@ -496,6 +499,271 @@ export function volumeActions(ep: string, v: Volume): MenuEntry[] {
       onClick: async () => {
         if (await confirm({ title: tr('Delete volume {0}', v.Name), body: tr('The data will be lost permanently.'), danger: true, confirm: tr('Delete') }))
           act(api.del(`/e/${enc(ep)}/volumes/${enc(v.Name)}`), tr('Volume deleted'))
+      },
+    },
+  ]
+}
+
+// ---------- swarm ----------
+export const stackOfService = (sv: Service) => sv.Spec.Labels?.['com.docker.stack.namespace'] || ''
+export const serviceImage = (sv: Service) => sv.Spec.TaskTemplate.ContainerSpec.Image.split('@')[0]
+export const serviceMode = (sv: Service) => (sv.Spec.Mode.Global ? 'global' : sv.Spec.Mode.ReplicatedJob ? 'job' : sv.Spec.Mode.GlobalJob ? 'global job' : 'replicated')
+export const publishedPorts = (sv: Service) => (sv.Endpoint?.Ports || sv.Spec.EndpointSpec?.Ports || []).filter((p) => p.PublishedPort)
+
+function swarmAct(p: Promise<any>, ok?: string) {
+  return act(
+    p.then((r) => {
+      for (const w of r?.warnings || []) toast.info(w)
+      return r
+    }),
+    ok,
+  )
+}
+
+export async function scaleService(ep: string, sv: Service) {
+  const v = await prompt({ title: tr('Scale {0}', sv.Spec.Name), label: tr('Replicas'), value: String(sv.Spec.Mode.Replicated?.Replicas ?? 1), confirm: tr('Scale') })
+  if (v === null) return
+  const n = Number(v)
+  if (!Number.isInteger(n) || n < 0) return toast.err(tr('Enter a whole number of replicas'))
+  swarmAct(api.post(`/e/${enc(ep)}/services/${enc(sv.ID)}/action/scale`, { replicas: n }), tr('{0} scaled to {1}', sv.Spec.Name, n))
+}
+
+export async function updateServiceImage(ep: string, sv: Service) {
+  const img = await prompt({ title: tr('Update image of {0}', sv.Spec.Name), label: tr('Image'), value: serviceImage(sv), confirm: tr('Update'), help: tr('The tasks are replaced following the service\'s update policy (rolling update).') })
+  if (img) swarmAct(api.post(`/e/${enc(ep)}/services/${enc(sv.ID)}/action/image`, { image: img }), tr('{0}: updating to {1}', sv.Spec.Name, img))
+}
+
+export async function removeServices(ep: string, list: Service[]) {
+  const ok = await confirm({
+    title: list.length === 1 ? tr('Delete service {0}', list[0].Spec.Name) : tr('Delete {0} services', list.length),
+    body: tr('All its tasks are stopped and removed. Volumes are kept.'),
+    danger: true,
+    confirm: tr('Delete'),
+  })
+  if (ok) act(Promise.all(list.map((sv) => api.del(`/e/${enc(ep)}/services/${enc(sv.ID)}`))), list.length === 1 ? tr('{0} deleted', list[0].Spec.Name) : tr('{0} services deleted', list.length))
+}
+
+export function serviceActions(ep: string, sv: Service): MenuEntry[] {
+  const name = sv.Spec.Name
+  const base = `/e/${enc(ep)}/services/${enc(sv.ID)}`
+  const replicated = !!sv.Spec.Mode.Replicated
+  const ports = publishedPorts(sv)
+  const host = endpointHost(ep)
+  const stack = stackOfService(sv)
+  return [
+    { header: tr('service {0}', name) },
+    { label: tr('Open record'), icon: <Boxes size={I} />, onClick: () => go(ep, 'services', sv.ID) },
+    { label: tr('Live logs'), icon: <ScrollText size={I} />, onClick: () => go(ep, 'services', sv.ID, 'logs') },
+    { label: tr('Tasks'), icon: <ListChecks size={I} />, onClick: () => go(ep, 'services', sv.ID, 'tasks') },
+    'sep',
+    { label: tr('Scale…'), icon: <Scaling size={I} />, disabled: !replicated, hint: replicated ? `${sv.Spec.Mode.Replicated!.Replicas}` : serviceMode(sv), onClick: () => scaleService(ep, sv) },
+    { label: tr('Restart (force update)'), icon: <RotateCw size={I} />, onClick: () => swarmAct(api.post(`${base}/action/restart`), tr('{0}: restarting tasks', name)) },
+    { label: tr('Update image…'), icon: <ArrowUpCircle size={I} />, onClick: () => updateServiceImage(ep, sv) },
+    {
+      label: tr('Roll back to the previous version'),
+      icon: <Undo2 size={I} />,
+      disabled: !sv.PreviousSpec,
+      hint: sv.PreviousSpec ? undefined : tr('no previous version'),
+      onClick: async () => {
+        if (await confirm({ title: tr('Roll back {0}', name), body: tr('The service returns to its previous configuration.'), confirm: tr('Roll back') }))
+          swarmAct(api.post(`${base}/action/rollback`), tr('{0}: rolling back', name))
+      },
+    },
+    { label: tr('Edit configuration'), icon: <Pencil size={I} />, onClick: () => go(ep, 'services', sv.ID, 'spec') },
+    'sep',
+    {
+      label: tr('Open port'),
+      icon: <ExternalLink size={I} />,
+      disabled: ports.length === 0,
+      hint: ports.length === 0 ? tr('no ports') : undefined,
+      submenu: ports.map((p) => ({
+        label: `${p.PublishedPort} → ${p.TargetPort}/${p.Protocol}`,
+        hint: p.PublishMode,
+        onClick: () => window.open(`${p.TargetPort === 443 ? 'https' : 'http'}://${host}:${p.PublishedPort}`, '_blank'),
+      })),
+    },
+    {
+      label: tr('Copy'),
+      icon: <ClipboardCopy size={I} />,
+      submenu: [
+        { label: tr('Name'), onClick: () => copy(name) },
+        { label: 'ID', hint: shortId(sv.ID), onClick: () => copy(sv.ID) },
+        { label: tr('Image'), onClick: () => copy(serviceImage(sv)) },
+        'sep',
+        { label: tr('docker service logs command'), onClick: () => copy(`docker service logs -f --tail 200 ${name}`) },
+        { label: tr('docker service ps command'), onClick: () => copy(`docker service ps ${name}`) },
+      ],
+    },
+    stack && { label: tr('Go to stack {0}', stack), icon: <Layers size={I} />, onClick: () => go(ep, 'swarm-stacks', stack) },
+    toggleFav(ep, 'service', sv.ID, name),
+    'sep',
+    { label: tr('Delete service…'), icon: <Trash2 size={I} />, danger: true, onClick: () => removeServices(ep, [sv]) },
+  ]
+}
+
+export function nodeName(n: SwarmNode) {
+  return n.Spec.Name || n.Description.Hostname
+}
+
+function labelsText(l?: Record<string, string>) {
+  return Object.entries(l || {}).map(([k, v]) => `${k}=${v}`).join(', ')
+}
+
+export function parseLabels(text: string): Record<string, string> {
+  const out: Record<string, string> = {}
+  for (const part of text.split(/[,\n]/)) {
+    const [k, ...v] = part.split('=')
+    if (k.trim()) out[k.trim()] = v.join('=').trim()
+  }
+  return out
+}
+
+export async function editNodeLabels(ep: string, n: SwarmNode) {
+  const v = await prompt({ title: tr('Labels of {0}', nodeName(n)), label: 'key=value, key2=value2', value: labelsText(n.Spec.Labels), confirm: tr('Save'), help: tr('Use them in placement constraints, e.g. node.labels.zone==a') })
+  if (v !== null) act(api.post(`/e/${enc(ep)}/nodes/${enc(n.ID)}/update`, { labels: parseLabels(v) }), tr('Labels of {0} saved', nodeName(n)))
+}
+
+export async function drainNode(ep: string, n: SwarmNode) {
+  const name = nodeName(n)
+  if (await confirm({ title: tr('Drain {0}', name), body: tr('Its {0} running tasks will be rescheduled on other nodes.', n.RunningTasks), confirm: tr('Drain') }))
+    act(api.post(`/e/${enc(ep)}/nodes/${enc(n.ID)}/update`, { availability: 'drain' }), tr('{0}: drained', name))
+}
+
+export function nodeActions(ep: string, n: SwarmNode): MenuEntry[] {
+  const name = nodeName(n)
+  const update = (body: any, ok: string) => () => act(api.post(`/e/${enc(ep)}/nodes/${enc(n.ID)}/update`, body), ok)
+  const manager = n.Spec.Role === 'manager'
+  return [
+    { header: tr('node {0}', name) },
+    { label: tr('Open record'), icon: <Server size={I} />, onClick: () => go(ep, 'nodes', n.ID) },
+    'sep',
+    {
+      label: tr('Availability'),
+      icon: <Activity size={I} />,
+      submenu: [
+        { label: tr('Active'), checked: n.Spec.Availability === 'active', onClick: update({ availability: 'active' }, tr('{0}: active', name)) },
+        { label: tr('Pause (no new tasks)'), checked: n.Spec.Availability === 'pause', onClick: update({ availability: 'pause' }, tr('{0}: paused', name)) },
+        { label: tr('Drain (move its tasks away)'), checked: n.Spec.Availability === 'drain', onClick: () => drainNode(ep, n) },
+      ],
+    },
+    manager
+      ? { label: tr('Demote to worker'), icon: <ArrowDownCircle size={I} />, disabled: n.ManagerStatus?.Leader, hint: n.ManagerStatus?.Leader ? 'leader' : undefined, onClick: update({ role: 'worker' }, tr('{0} is now a worker', name)) }
+      : { label: tr('Promote to manager'), icon: <ShieldCheck size={I} />, onClick: update({ role: 'manager' }, tr('{0} is now a manager', name)) },
+    { label: tr('Edit labels…'), icon: <Tags size={I} />, onClick: () => editNodeLabels(ep, n) },
+    'sep',
+    {
+      label: tr('Copy'),
+      icon: <ClipboardCopy size={I} />,
+      submenu: [
+        { label: tr('Hostname'), onClick: () => copy(n.Description.Hostname) },
+        { label: 'ID', hint: shortId(n.ID), onClick: () => copy(n.ID) },
+        { label: tr('Address'), hint: n.Status.Addr, onClick: () => copy(n.Status.Addr) },
+      ],
+    },
+    toggleFav(ep, 'node', n.ID, name),
+    'sep',
+    {
+      label: tr('Remove from the swarm…'),
+      icon: <Trash2 size={I} />,
+      danger: true,
+      onClick: async () => {
+        const ok = await confirm({
+          title: tr('Remove node {0}', name),
+          body: n.Status.State === 'down' ? tr('The node is down: it is removed from the cluster list.') : tr('A node that is still up must leave the swarm first (docker swarm leave on it), or be removed by force.'),
+          danger: true,
+          confirm: tr('Remove'),
+          check: n.Status.State === 'down' ? undefined : tr('Force'),
+        })
+        if (ok) act(api.del(`/e/${enc(ep)}/nodes/${enc(n.ID)}?force=${ok.checked ? 1 : 0}`), tr('Node {0} removed', name))
+      },
+    },
+  ]
+}
+
+export function swarmObjectActions(ep: string, kind: 'secrets' | 'configs', o: SwarmObject): MenuEntry[] {
+  const secret = kind === 'secrets'
+  return [
+    { header: `${secret ? 'secret' : 'config'} ${o.Spec.Name}` },
+    { label: tr('Open record'), icon: secret ? <KeyRound size={I} /> : <FileText size={I} />, onClick: () => go(ep, kind, o.ID) },
+    o.UsedBy.length > 0 && {
+      label: tr('Used by'),
+      icon: <Boxes size={I} />,
+      submenu: o.UsedBy.map((u) => ({ label: u.name, onClick: () => go(ep, 'services', u.id) })),
+    },
+    'sep',
+    {
+      label: tr('Copy'),
+      icon: <ClipboardCopy size={I} />,
+      submenu: [
+        { label: tr('Name'), onClick: () => copy(o.Spec.Name) },
+        { label: 'ID', hint: shortId(o.ID), onClick: () => copy(o.ID) },
+        { label: tr('Compose reference'), onClick: () => copy(`${kind}:\n  ${o.Spec.Name}:\n    external: true\n`) },
+      ],
+    },
+    'sep',
+    {
+      label: secret ? tr('Delete secret…') : tr('Delete config…'),
+      icon: <Trash2 size={I} />,
+      danger: true,
+      disabled: o.UsedBy.length > 0,
+      hint: o.UsedBy.length ? tr('in use') : undefined,
+      onClick: async () => {
+        if (await confirm({ title: tr('Delete {0}', o.Spec.Name), danger: true, confirm: tr('Delete') }))
+          act(api.del(`/e/${enc(ep)}/${kind}/${enc(o.ID)}`), tr('{0} deleted', o.Spec.Name))
+      },
+    },
+  ]
+}
+
+/** docker stack deploy; images with build: are built first (pushed if the stack is set to). */
+export function swarmStackDeploy(ep: string, name: string, opts: { build?: boolean; push?: boolean } = {}) {
+  const push = opts.push ?? getPref(`swarm.push.${ep}.${name}`, false)
+  return runJob(`${name}: deploy`, 'POST', `/e/${enc(ep)}/swarm/stacks/${enc(name)}/deploy`, { build: opts.build, push })
+    .catch((e) => toast.err(e))
+    .finally(() => invalidate('/swarm', '/services', '/images'))
+}
+
+export function swarmStackActions(ep: string, st: SwarmStack): MenuEntry[] {
+  const noFiles = st.managed ? undefined : tr('no files')
+  return [
+    { header: `stack ${st.name}` },
+    { label: tr('Open record'), icon: <Layers size={I} />, onClick: () => go(ep, 'swarm-stacks', st.name) },
+    { label: st.managed ? tr('Edit compose') : tr('Attach compose…'), icon: <FileCode2 size={I} />, onClick: () => go(ep, 'swarm-stacks', st.name, 'compose') },
+    { label: tr('Combined logs'), icon: <ScrollText size={I} />, disabled: st.services.length === 0, onClick: () => go(ep, 'swarm-stacks', st.name, 'logs') },
+    'sep',
+    { label: tr('Deploy (stack deploy)'), icon: <Rocket size={I} />, disabled: !st.managed, hint: noFiles, onClick: () => swarmStackDeploy(ep, st.name) },
+    { label: tr('Build, push and deploy'), icon: <Upload size={I} />, disabled: !st.managed, hint: noFiles, onClick: () => swarmStackDeploy(ep, st.name, { build: true, push: true }) },
+    { label: tr('Deploy without building'), icon: <Rocket size={I} />, disabled: !st.managed, hint: noFiles, onClick: () => swarmStackDeploy(ep, st.name, { build: false }) },
+    {
+      label: tr('Services'),
+      icon: <Boxes size={I} />,
+      disabled: st.services.length === 0,
+      submenu: st.services.map((sv) => ({ label: sv.name, hint: `${sv.running}/${sv.desired}`, onClick: () => go(ep, 'services', sv.id) })),
+    },
+    {
+      label: st.location ? tr('Change location…') : st.managed ? tr('Move to a directory…') : tr('Use the compose file in a directory…'),
+      icon: <FolderOpen size={I} />,
+      hint: st.location?.dir,
+      onClick: () => openDialog((close) => <LocationDialog ep={ep} swarm stack={{ name: st.name, location: st.location, total: st.running, managed: st.managed }} onClose={close} />),
+    },
+    'sep',
+    {
+      label: tr('Delete stack…'),
+      icon: <Trash2 size={I} />,
+      danger: true,
+      onClick: async () => {
+        const ok = await confirm({
+          title: tr('Delete {0}', st.name),
+          body: tr('docker stack rm removes its services, networks, secrets and configs. Volumes are kept.'),
+          danger: true,
+          confirm: tr('Delete'),
+          check: st.managed ? tr('Keep the compose file in ducktainer') : undefined,
+        })
+        if (!ok) return
+        runJob(tr('Delete {0}', st.name), 'DELETE', `/e/${enc(ep)}/swarm/stacks/${enc(st.name)}?keep=${ok.checked ? 1 : 0}`)
+          .then(() => go(ep, 'swarm-stacks'))
+          .catch((e) => toast.err(e))
+          .finally(() => invalidate('/swarm', '/services'))
       },
     },
   ]

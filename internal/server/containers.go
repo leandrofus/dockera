@@ -442,7 +442,12 @@ func logQuery(r *http.Request) url.Values {
 }
 
 func streamLogs(ctx context.Context, c *docker.Client, id string, tty bool, q url.Values, label string, st *stream) error {
-	resp, err := c.Do(ctx, http.MethodGet, "/containers/"+id+"/logs", q, nil, nil)
+	return streamLogsAt(ctx, c, "/containers/"+id+"/logs", tty, q, label, st)
+}
+
+// streamLogsAt streams a container or service log endpoint as logLine events.
+func streamLogsAt(ctx context.Context, c *docker.Client, p string, tty bool, q url.Values, label string, st *stream) error {
+	resp, err := c.Do(ctx, http.MethodGet, p, q, nil, nil)
 	if err != nil {
 		return err
 	}
