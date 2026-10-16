@@ -83,9 +83,16 @@ func (s *service) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<
 	status <- svc.Status{State: svc.StartPending}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
+	// created here, before serve and the relay watcher both look for it: two
+	// first-run Loads race to write it (and Windows refuses the second rename)
+	cfg, err := config.Load()
+	if err != nil {
+		log.Printf("config: %v", err)
+		return true, 1
+	}
 	errc := make(chan error, 1)
 	go func() { errc <- cmdServe(s.args, false) }()
-	go watchRelays(ctx)
+	go watchRelays(ctx, cfg)
 	status <- svc.Status{State: svc.Running, Accepts: svc.AcceptStop | svc.AcceptShutdown}
 	for {
 		select {
@@ -109,12 +116,7 @@ func (s *service) Execute(_ []string, req <-chan svc.ChangeRequest, status chan<
 // itself; see engine.Relay), and only trusts relays of administrators.
 // Each distribution is added once per run, so removing its endpoint sticks
 // until the service restarts.
-func watchRelays(ctx context.Context) {
-	cfg, err := config.Load()
-	if err != nil {
-		log.Printf("wsl relays: %v", err)
-		return
-	}
+func watchRelays(ctx context.Context, cfg *config.Config) {
 	cfg.Watch(func() {})
 	docker.TrustRelay = func(account, _ string) bool {
 		a := cfg.Snapshot().Auth

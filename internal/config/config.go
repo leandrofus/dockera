@@ -408,12 +408,22 @@ func (c *Config) save() error {
 	if err != nil {
 		return err
 	}
-	tmp := c.path + ".tmp"
-	if err := os.WriteFile(tmp, data, 0o600); err != nil {
+	// a unique temporary file: the service and the CLI may save at once
+	f, err := os.CreateTemp(filepath.Dir(c.path), "config.json.*.tmp")
+	if err != nil {
 		return err
 	}
-	FixOwner(tmp)
-	if err := os.Rename(tmp, c.path); err != nil {
+	tmp := f.Name()
+	_, err = f.Write(data)
+	if cerr := f.Close(); err == nil {
+		err = cerr
+	}
+	if err == nil {
+		FixOwner(tmp)
+		err = replaceFile(tmp, c.path)
+	}
+	if err != nil {
+		os.Remove(tmp)
 		return err
 	}
 	if st, err := os.Stat(c.path); err == nil {

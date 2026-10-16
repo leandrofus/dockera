@@ -3,8 +3,10 @@
 package config
 
 import (
+	"errors"
 	"os"
 	"path/filepath"
+	"time"
 
 	"golang.org/x/sys/windows"
 )
@@ -48,4 +50,21 @@ func Restrict(dir string) error {
 	}
 	return windows.SetNamedSecurityInfo(dir, windows.SE_FILE_OBJECT,
 		windows.DACL_SECURITY_INFORMATION|windows.PROTECTED_DACL_SECURITY_INFORMATION, nil, nil, dacl, nil)
+}
+
+// replaceFile renames tmp over path. Windows refuses while another process
+// (or goroutine) has path open — the CLI or the service reading it — so it
+// retries for a couple of seconds.
+func replaceFile(tmp, path string) error {
+	var err error
+	for i := 0; i < 40; i++ {
+		if err = os.Rename(tmp, path); err == nil {
+			return nil
+		}
+		if !errors.Is(err, windows.ERROR_SHARING_VIOLATION) && !errors.Is(err, windows.ERROR_ACCESS_DENIED) {
+			return err
+		}
+		time.Sleep(50 * time.Millisecond)
+	}
+	return err
 }
